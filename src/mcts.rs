@@ -7,36 +7,43 @@ use std::fmt::Debug;
 
 use utils::{choose_random};
 
+
+/// An `Action` represents a move in a game.
 pub trait Action: Debug+Clone+Copy+PartialEq {}
 
-/// Trait that needs to be implemented
-///
-/// Your game also need to implement Clone
-pub trait Game<A> : Clone where A: Action {
-    fn allowed_moves(&self) -> Vec<A>;
-    fn make_move(&mut self, a_move: &A);
+/// A `Game` represets a game state.
+pub trait Game<A: Action> : Clone {
+
+    /// Return a list with all allowed actions given the current game state.
+    fn allowed_actions(&self) -> Vec<A>;
+
+    /// Change the current game state according to the given action.
+    fn make_move(&mut self, action: &A);
+
+    /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32;
 }
 
 
 /// Perform a random playout.
-pub fn playout<G, A>(game: &G) -> G
-    where G: Game<A>, A: Action {
-    let mut game = game.clone();
+///
+/// Start with an initial game state and perform random
+/// actions from `game.allowed_actions` until a game-state
+/// is reached that does not have any `allowed_actions`.
+pub fn playout<G: Game<A>, A: Action>(initial: &G) -> G {
+    let mut game = initial.clone();
 
-    let mut potential_moves = game.allowed_moves();
+    let mut potential_moves = game.allowed_actions();
     while potential_moves.len() > 0 {
         let action = choose_random(&potential_moves).clone();
         game.make_move(&action);
-        potential_moves = game.allowed_moves();
+        potential_moves = game.allowed_actions();
     }
     game
 }
 
-/// Calculate the expected reward based on random playouts
-pub fn expected_reward<G, A>(game: &G, n_samples: usize) -> f32
-    where G: Game<A>, A: Action {
-
+/// Calculate the expected reward based on random playouts.
+pub fn expected_reward<G: Game<A>, A: Action>(game: &G, n_samples: usize) -> f32 {
     let mut score_sum: f32 = 0.0;
 
     for _ in 0..n_samples {
@@ -49,7 +56,7 @@ pub fn expected_reward<G, A>(game: &G, n_samples: usize) -> f32
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct TreeNode<A> where A: Action {
+struct TreeNode<A: Action> {
     action: Option<A>,                  // how did we get here
     children: Vec<TreeNode<A>>,         // next steps we investigated
     terminal_state: bool,               // is this a leaf of the tree?
@@ -90,7 +97,7 @@ impl<A> TreeNode<A> where A: Action {
     /// XXX Use HashSet? Use iterators? XXX
     pub fn expand<G>(&mut self, game: &G) -> Option<&mut TreeNode<A>>
         where G: Game<A> {
-        let allowed_actions = game.allowed_moves();
+        let allowed_actions = game.allowed_actions();
 
         if allowed_actions.len() == 0 {
             self.fully_expanded = true;
@@ -177,8 +184,7 @@ impl<A> TreeNode<A> where A: Action {
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct MCTS<G, A>
-    where G: Game<A>, A: Action {
+pub struct MCTS<G: Game<A>, A: Action> {
     root: TreeNode<A>,
     game: G
 }

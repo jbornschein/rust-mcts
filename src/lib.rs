@@ -15,4 +15,6 @@ extern crate rand;
 pub mod minigame;
 pub mod tictactoe;
 pub mod mcts;
-mod utils;
+pub mod utils;
+
+//use mcts::{Action, Game, MCTS};

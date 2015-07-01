@@ -33,7 +33,7 @@ impl fmt::Display for MiniGame {
 }
 
 impl Game<MiniMove> for MiniGame {
-    fn allowed_moves(&self) -> Vec<MiniMove> {
+    fn allowed_actions(&self) -> Vec<MiniMove> {
         let mut moves = Vec::new();
 
         if self.sum < WINNING_SUM {
