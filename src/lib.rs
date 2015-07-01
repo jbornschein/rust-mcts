@@ -13,6 +13,7 @@ extern crate test;
 extern crate rand;
 
 pub mod minigame;
+pub mod twofortyeight;
 // pub mod tictactoe;
 pub mod mcts;
 pub mod utils;
