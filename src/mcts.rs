@@ -7,21 +7,21 @@ use std::fmt::Debug;
 
 use utils::{choose_random};
 
+pub trait Action: Debug+Clone+Copy+PartialEq {}
+
 /// Trait that needs to be implemented
 ///
 /// Your game also need to implement Clone
-pub trait Game<M>
-    where M: Debug+Copy+Clone+PartialEq {
-
-    fn allowed_moves(&self) -> Vec<M>;
-    fn make_move(&mut self, a_move: &M);
+pub trait Game<A> : Clone where A: Action {
+    fn allowed_moves(&self) -> Vec<A>;
+    fn make_move(&mut self, a_move: &A);
     fn reward(&self) -> f32;
 }
 
 
 /// Perform a random playout.
-pub fn playout<G, M>(game: &G) -> G
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
+pub fn playout<G, A>(game: &G) -> G
+    where G: Game<A>, A: Action {
     let mut game = game.clone();
 
     let mut potential_moves = game.allowed_moves();
@@ -34,8 +34,8 @@ pub fn playout<G, M>(game: &G) -> G
 }
 
 /// Calculate the expected reward based on random playouts
-pub fn expected_reward<G, M>(game: &G, n_samples: usize) -> f32
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
+pub fn expected_reward<G, A>(game: &G, n_samples: usize) -> f32
+    where G: Game<A>, A: Action {
 
     let mut score_sum: f32 = 0.0;
 
@@ -49,20 +49,20 @@ pub fn expected_reward<G, M>(game: &G, n_samples: usize) -> f32
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
-    action: Option<M>,                  // how did we get here
-    children: Vec<TreeNode<M>>,         // next steps we investigated
+struct TreeNode<A> where A: Action {
+    action: Option<A>,                  // how did we get here
+    children: Vec<TreeNode<A>>,         // next steps we investigated
     terminal_state: bool,               // is this a leaf of the tree?
     fully_expanded: bool,               // are there unexplored actions?
     n: f32, q: f32                      // statistics for this game state
 }
 
 
-impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
+impl<A> TreeNode<A> where A: Action {
 
     /// Create and initialize a new TreeNode
-    pub fn new(action: Option<M>) -> TreeNode<M> {
-        TreeNode::<M> {
+    pub fn new(action: Option<A>) -> TreeNode<A> {
+        TreeNode::<A> {
             action: action,
             children: Vec::new(),
             terminal_state: false,
@@ -71,9 +71,9 @@ impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
     }
 
     /// Find the best child accoring to UCT1
-    pub fn best_child(&mut self, c: f32) -> Option<&mut TreeNode<M>> {
+    pub fn best_child(&mut self, c: f32) -> Option<&mut TreeNode<A>> {
         let mut best_value :f32 = f32::NEG_INFINITY;
-        let mut best_child :Option<&mut TreeNode<M>> = None;
+        let mut best_child :Option<&mut TreeNode<A>> = None;
 
         for child in &mut self.children {
             let value = child.q / child.n + c*(2.*self.n.ln()/child.n).sqrt();
@@ -88,8 +88,8 @@ impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
     /// Add a child to the current node with an previously
     /// unexplored action.
     /// XXX Use HashSet? Use iterators? XXX
-    pub fn expand<G>(&mut self, game: &G) -> Option<&mut TreeNode<M>>
-        where G: Game<M> {
+    pub fn expand<G>(&mut self, game: &G) -> Option<&mut TreeNode<A>>
+        where G: Game<A> {
         let allowed_actions = game.allowed_moves();
 
         if allowed_actions.len() == 0 {
@@ -98,7 +98,7 @@ impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
             return None;
         }
 
-        let mut child_actions : Vec<M> = Vec::new();
+        let mut child_actions : Vec<A> = Vec::new();
         for child in &self.children {
             match child.action {
                 Some(a) => child_actions.push(a),
@@ -128,7 +128,7 @@ impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
 
     /// Recursively perform an MCTS iteration.
     pub fn iteration<G>(&mut self, game: &mut G, c: f32) -> f32
-        where G: Game<M>+Clone {
+        where G: Game<A>+Clone {
 
         if self.terminal_state {
             let delta = game.reward();
@@ -177,24 +177,22 @@ impl<M> TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct MCTS<G, M>
-    where G: Game<M>+Clone, M: Debug+Clone+Copy+PartialEq {
-
-    root: TreeNode<M>,
+pub struct MCTS<G, A>
+    where G: Game<A>, A: Action {
+    root: TreeNode<A>,
     game: G
 }
 
-impl <G, M> MCTS<G, M>
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
+impl <G: Game<A>, A: Action> MCTS<G, A> {
 
     /// Create a new MCTS solver
-    pub fn new(game: &G) -> MCTS<G, M> {
+    pub fn new(game: &G) -> MCTS<G, A> {
         let game = game.clone();
         let root = TreeNode::new(None);
         MCTS {root: root, game: game}
     }
 
-    pub fn search(&mut self, game: &G, n_samples: usize, c: f32) -> Vec<M> {
+    pub fn search(&mut self, game: &G, n_samples: usize, c: f32) -> Vec<A> {
         let root = &mut self.root;
 
         // Perform MCTS iterations
@@ -214,15 +212,14 @@ impl <G, M> MCTS<G, M>
     }
 }
 
-impl<G, M> fmt::Display for MCTS<G, M>
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
+impl<G: Game<A>, A: Action> fmt::Display for MCTS<G, A> {
 
     /// Output a nicely indented tree
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 
         // Nested definition for recursive formatting
         fn fmt_subtree<M>(f: &mut fmt::Formatter, node: &TreeNode<M>, indent_level :i32) -> fmt::Result
-            where M: Debug+Copy+Clone+PartialEq {
+            where M: Action {
             for _ in (0..indent_level) {
                 try!(f.write_str("    "));
             }

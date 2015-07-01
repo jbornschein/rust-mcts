@@ -3,7 +3,7 @@
 //!
 
 use std::fmt;
-use mcts::Game;
+use mcts::{Action, Game};
 
 const WINNING_SUM :u32 = 11;
 const DRAW_MIN :u32 = 3;
@@ -13,6 +13,7 @@ const DRAW_MAX :u32 = 6;
 pub struct MiniMove {
     add: u32
 }
+impl Action for MiniMove {}
 
 #[derive(Debug, Clone)]
 pub struct MiniGame {
