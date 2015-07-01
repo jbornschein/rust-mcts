@@ -8,11 +8,8 @@ use std::fmt::Debug;
 use utils::{choose_random};
 
 
-/// An `Action` represents a move in a game.
-pub trait Action: Debug+Clone+Copy+PartialEq {}
-
 /// A `Game` represets a game state.
-pub trait Game<A: Action> : Clone {
+pub trait Game<A: GameAction> : Clone {
 
     /// Return a list with all allowed actions given the current game state.
     fn allowed_actions(&self) -> Vec<A>;
@@ -24,13 +21,16 @@ pub trait Game<A: Action> : Clone {
     fn reward(&self) -> f32;
 }
 
+/// A `GameAction` represents a move in a game.
+pub trait GameAction: Debug+Clone+Copy+PartialEq {}
+
 
 /// Perform a random playout.
 ///
-/// Start with an initial game state and perform random
-/// actions from `game.allowed_actions` until a game-state
-/// is reached that does not have any `allowed_actions`.
-pub fn playout<G: Game<A>, A: Action>(initial: &G) -> G {
+/// Start with an initial game state and perform random actions from 
+/// `game.allowed_actions` until a game-stateis reached that does not have
+/// any `allowed_actions`.
+pub fn playout<G: Game<A>, A: GameAction>(initial: &G) -> G {
     let mut game = initial.clone();
 
     let mut potential_moves = game.allowed_actions();
@@ -43,7 +43,7 @@ pub fn playout<G: Game<A>, A: Action>(initial: &G) -> G {
 }
 
 /// Calculate the expected reward based on random playouts.
-pub fn expected_reward<G: Game<A>, A: Action>(game: &G, n_samples: usize) -> f32 {
+pub fn expected_reward<G: Game<A>, A: GameAction>(game: &G, n_samples: usize) -> f32 {
     let mut score_sum: f32 = 0.0;
 
     for _ in 0..n_samples {
@@ -56,7 +56,7 @@ pub fn expected_reward<G: Game<A>, A: Action>(game: &G, n_samples: usize) -> f32
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct TreeNode<A: Action> {
+struct TreeNode<A: GameAction> {
     action: Option<A>,                  // how did we get here
     children: Vec<TreeNode<A>>,         // next steps we investigated
     terminal_state: bool,               // is this a leaf of the tree?
@@ -65,7 +65,7 @@ struct TreeNode<A: Action> {
 }
 
 
-impl<A> TreeNode<A> where A: Action {
+impl<A> TreeNode<A> where A: GameAction {
 
     /// Create and initialize a new TreeNode
     pub fn new(action: Option<A>) -> TreeNode<A> {
@@ -184,12 +184,12 @@ impl<A> TreeNode<A> where A: Action {
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct MCTS<G: Game<A>, A: Action> {
+pub struct MCTS<G: Game<A>, A: GameAction> {
     root: TreeNode<A>,
     game: G
 }
 
-impl <G: Game<A>, A: Action> MCTS<G, A> {
+impl <G: Game<A>, A: GameAction> MCTS<G, A> {
 
     /// Create a new MCTS solver
     pub fn new(game: &G) -> MCTS<G, A> {
@@ -218,14 +218,14 @@ impl <G: Game<A>, A: Action> MCTS<G, A> {
     }
 }
 
-impl<G: Game<A>, A: Action> fmt::Display for MCTS<G, A> {
+impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
 
     /// Output a nicely indented tree
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 
         // Nested definition for recursive formatting
         fn fmt_subtree<M>(f: &mut fmt::Formatter, node: &TreeNode<M>, indent_level :i32) -> fmt::Result
-            where M: Action {
+            where M: GameAction {
             for _ in (0..indent_level) {
                 try!(f.write_str("    "));
             }
@@ -253,7 +253,7 @@ mod tests {
 
     use mcts::*;
     use minigame::MiniGame;
-    // use tictactoe::{TicTacToe, Player, GameStatus, Move};
+    // use tictactoe::{TicTacToe, Action, Player, GameStatus};
 
     #[test]
     fn test_playout() {

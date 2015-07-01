@@ -12,17 +12,17 @@
 //!
 
 use std::fmt;
-use mcts::{Action, Game};
+use mcts::{GameAction, Game};
 
 const WINNING_SUM :u32 = 11;
 const DRAW_MIN :u32 = 3;
 const DRAW_MAX :u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MiniMove {
+pub struct Action {
     add: u32
 }
-impl Action for MiniMove {}
+impl GameAction for Action {}
 
 #[derive(Debug, Clone)]
 pub struct MiniGame {
@@ -41,13 +41,13 @@ impl fmt::Display for MiniGame {
     }
 }
 
-impl Game<MiniMove> for MiniGame {
-    fn allowed_actions(&self) -> Vec<MiniMove> {
+impl Game<Action> for MiniGame {
+    fn allowed_actions(&self) -> Vec<Action> {
         let mut moves = Vec::new();
 
         if self.sum < WINNING_SUM {
             for add in DRAW_MIN..DRAW_MAX {
-                moves.push(MiniMove{add: add});
+                moves.push(Action{add: add});
             }
         }
         moves
@@ -60,7 +60,7 @@ impl Game<MiniMove> for MiniGame {
         else { panic!("Huh?") }
     }
 
-    fn make_move(&mut self, a_move: &MiniMove) {
+    fn make_move(&mut self, a_move: &Action) {
         self.sum = self.sum + a_move.add;
     }
 }
