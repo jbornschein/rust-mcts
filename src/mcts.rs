@@ -1,24 +1,11 @@
 
 extern crate test;
-extern crate rand;
 
 use std::fmt;
 use std::f32;
 use std::fmt::Debug;
-use rand::Rng;
 
-/// Implementation of a simple Monte Carlo Tree Search algorithm.
-///
-/// This implementation closely follows the terminology introduced in[1]
-/// and implements the basic algorithm described in section 3. To use this
-/// module you need to implement two things: a `Game` and a matching `Move`
-/// structure.
-///
-/// [1] A Survey of Monte Carlo Tree Search Methods
-
-
-//////////////////////////////////////////////////////////////////////////
-
+use utils::{choose_random};
 
 /// Trait that needs to be implemented
 ///
@@ -27,34 +14,42 @@ pub trait Game<M>
     where M: Debug+Copy+Clone+PartialEq {
 
     fn allowed_moves(&self) -> Vec<M>;
-    fn reward(&self) -> f32;
     fn make_move(&mut self, a_move: &M);
+    fn reward(&self) -> f32;
 }
 
-//////////////////////////////////////////////////////////////////////////
 
-fn choose_random<T>(vec: &Vec<T>) -> &T {
-    let mut rng = rand::thread_rng();
+/// Perform a random playout.
+pub fn playout<G, M>(game: &G) -> G
+    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
+    let mut game = game.clone();
 
-    let length = vec.len();
-    let idx = rng.gen::<usize>() % length as usize;
-
-    &vec[idx]
+    let mut potential_moves = game.allowed_moves();
+    while potential_moves.len() > 0 {
+        let action = choose_random(&potential_moves).clone();
+        game.make_move(&action);
+        potential_moves = game.allowed_moves();
+    }
+    game
 }
 
-fn choose_random_mut<T>(vec: &mut Vec<T>) -> &mut T {
-    let mut rng = rand::thread_rng();
+/// Calculate the expected reward based on random playouts
+pub fn expected_reward<G, M>(game: &G, n_samples: usize) -> f32
+    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
 
-    let length = vec.len();
-    let idx = rng.gen::<usize>() % length as usize;
+    let mut score_sum: f32 = 0.0;
 
-    &mut vec[idx]
+    for _ in 0..n_samples {
+        score_sum += playout(game).reward();
+    }
+    (score_sum as f32) / (n_samples as f32)
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
+struct TreeNode<M> where M: Debug+Copy+Clone+PartialEq {
     action: Option<M>,                  // how did we get here
     children: Vec<TreeNode<M>>,         // next steps we investigated
     terminal_state: bool,               // is this a leaf of the tree?
@@ -245,49 +240,6 @@ impl<G, M> fmt::Display for MCTS<G, M>
     }
 }
 
-//////////////////////////////////////////////////////////////////////////
-
-/// Perform a random playout.
-pub fn playout<G, M>(game: &G) -> G
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
-    let mut rng = rand::thread_rng();
-    let mut game = game.clone();
-
-    let mut potential_moves = game.allowed_moves();
-    while potential_moves.len() > 0 {
-        let length = potential_moves.len();
-        let idx = rng.gen::<usize>() % length as usize;
-
-        game.make_move(&potential_moves[idx]);
-
-        potential_moves = game.allowed_moves();
-    }
-    game
-}
-
-/// Calculate the expected score based on random playouts
-pub fn expected_reward<G, M>(game: &G, n_samples: usize) -> f32
-    where G: Game<M>+Clone, M: Debug+Copy+Clone+PartialEq {
-
-    let mut score_sum: f32 = 0.0;
-
-    for _ in 0..n_samples {
-        score_sum += playout(game).reward();
-    }
-    (score_sum as f32) / (n_samples as f32)
-}
-
-//pub fn minimax(game: TicTacToe, depth: usize, n_samples: usize) -> Move {
-//}
-
-/*
-#[allow(dead_code)]
-fn main() {
-    let mut ttt = TicTacToe::new();
-    let final_ttt = playout(ttt);
-    println!("Final board:\n{}", final_ttt);
-}
-*/
 
 /////////////////////////////////////////////////////////////////////////////
 // Unittests
@@ -329,9 +281,9 @@ mod tests {
 
         println!("MCTS on new game: {:?}", mcts);
 
-        for i in 0..2 {
+        for i in 0..5 {
             mcts.root.iteration(&mut game.clone(), 1.0);
-            //println!("After {} iteration(s):\n{}", i, mcts);
+            println!("After {} iteration(s):\n{}", i, mcts);
         }
     }
 
