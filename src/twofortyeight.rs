@@ -1,5 +1,6 @@
 
 use std::fmt;
+use std::iter;
 use rand::random;
 
 use mcts::{GameAction, Game};
@@ -35,8 +36,31 @@ impl TwoFortyEight {
 
     ///
     pub fn merge_vec(vec: &Vec<u16>) -> Vec<u16> {
-        // first,
-        vec.clone()
+
+        // first, remove zeros
+        let orig_len = vec.len();
+        let vec = vec.iter().map(|t| *t).filter(|&t| t > 0).collect::<Vec<u16>>();
+
+        let mut merged = Vec::new();
+        let mut next = 0;
+        for t in vec {
+            if t == next {
+                merged.push(t+next);
+                next = 0;
+            } else {
+                if next != 0 {
+                    merged.push(next);
+                }
+                next = t;
+            }
+        }
+        if next != 0 {
+            merged.push(next);
+        }
+        for _ in 0..(orig_len-merged.len()) {
+            merged.push(0);
+        }
+        merged
     }
 
     ///
@@ -88,7 +112,20 @@ impl Game<Action> for TwoFortyEight {
 
     /// Change the current game state according to the given action.
     fn make_move(&mut self, action: &Action) {
-        // XXX
+        start, ostride, istride, match action {
+            Action::Up    => ( 0,  1,  4)
+            Action::Down  => (12,  1, -4)
+            Action::Left  => ( 0,  4,  1)
+            Action::Right => (15, -4, -1)
+        }
+
+        assert!(HEIGHT == WIDTH);
+
+        for i in 0..HEIGHT {
+            for j in 0..HEIGHT {
+                 XXX
+            }
+        }
     }
 
     /// Reward for the player when reaching the current game state.
@@ -100,13 +137,14 @@ impl Game<Action> for TwoFortyEight {
 
 impl fmt::Display for TwoFortyEight {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // XXX could be much nicer XXX
         try!(writeln!(f, "score={}", self.score));
-        for col in 0..WIDTH {
+        for _ in 0..WIDTH {
             try!(write!(f, "|{: ^5}", "-----"));
         }
         try!(f.write_str("|\n"));
         for row in 0..HEIGHT {
-            for col in 0..WIDTH {
+            for _ in 0..WIDTH {
                 try!(write!(f, "|{: ^5}", ""));
             }
             try!(f.write_str("|\n"));
@@ -119,11 +157,11 @@ impl fmt::Display for TwoFortyEight {
                 }
             }
             try!(f.write_str("|\n"));
-            for col in 0..WIDTH {
+            for _ in 0..WIDTH {
                 try!(write!(f, "|{: ^5}", ""));
             }
             try!(f.write_str("|\n"));
-            for col in 0..WIDTH {
+            for _ in 0..WIDTH {
                 try!(write!(f, "|{: ^5}", "-----"));
             }
             try!(f.write_str("|\n"));
@@ -187,6 +225,21 @@ mod tests {
             game.random_spawn();
         }
         assert!(game.board_full());
+    }
+
+    #[test]
+    fn test_merge_vec()
+    {
+        let test_cases = vec![
+            (vec![1, 2, 0, 0, 4], vec![1, 2, 4, 0, 0]),
+            (vec![1, 2, 2, 0, 4], vec![1, 4, 4, 0, 0]),
+            (vec![1, 2, 2, 2, 4], vec![1, 4, 2, 4, 0])
+        ];
+
+        for (input, should) in test_cases {
+            let  output = TwoFortyEight::merge_vec(&input);
+            println!("merge_vec({:?}) => {:?}  (should be {:?})", input, output, should);
+        }
     }
 
     #[bench]
