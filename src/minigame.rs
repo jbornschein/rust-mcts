@@ -1,5 +1,14 @@
 //!
-//! Implementation of a minimal game
+//! Implementation of a simple dummy game.
+//!
+//! The goal of the agent is to advance it's points to exactly 11.
+//! In each turn the agent can choose to add a number between 3 and 5; when 
+//! the sum is below 11 the agent can take another turn; if it is exactly 11
+//! the agent wins and gains a reward of 1; if it is above 11 the agent 
+//! looses and gains a final reward of -1.
+//!
+//! Potential, equally good sequences of action which let the agent win are thus
+//! e.g. [3, 3, 3, 2]; [5, 3, 3] or [4, 4, 3].
 //!
 
 use std::fmt;
