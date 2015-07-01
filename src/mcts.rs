@@ -27,9 +27,8 @@ pub trait GameAction: Debug+Clone+Copy+PartialEq {}
 
 /// Perform a random playout.
 ///
-/// Start with an initial game state and perform random actions from 
-/// `game.allowed_actions` until a game-stateis reached that does not have
-/// any `allowed_actions`.
+/// Start with an initial game state and perform random actions from
+/// until a game-state is reached that does not have any `allowed_actions`.
 pub fn playout<G: Game<A>, A: GameAction>(initial: &G) -> G {
     let mut game = initial.clone();
 
@@ -55,15 +54,18 @@ pub fn expected_reward<G: Game<A>, A: GameAction>(game: &G, n_samples: usize) ->
 
 //////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug,Copy,Clone)]
+enum NodeState {
+    LeafNode, FullyExpanded, Expandable
+}
+
 #[derive(Debug)]
 struct TreeNode<A: GameAction> {
     action: Option<A>,                  // how did we get here
     children: Vec<TreeNode<A>>,         // next steps we investigated
-    terminal_state: bool,               // is this a leaf of the tree?
-    fully_expanded: bool,               // are there unexplored actions?
+    state: NodeState,                   // is this a leaf node? fully expanded?
     n: f32, q: f32                      // statistics for this game state
 }
-
 
 impl<A> TreeNode<A> where A: GameAction {
 
@@ -72,8 +74,7 @@ impl<A> TreeNode<A> where A: GameAction {
         TreeNode::<A> {
             action: action,
             children: Vec::new(),
-            terminal_state: false,
-            fully_expanded: false,
+            state: NodeState::Expandable,
             n: 0., q: 0. }
     }
 
@@ -92,16 +93,15 @@ impl<A> TreeNode<A> where A: GameAction {
         best_child
     }
 
-    /// Add a child to the current node with an previously
-    /// unexplored action.
+    /// Add a child to the current node with an previously unexplored action.
+    ///
     /// XXX Use HashSet? Use iterators? XXX
     pub fn expand<G>(&mut self, game: &G) -> Option<&mut TreeNode<A>>
         where G: Game<A> {
         let allowed_actions = game.allowed_actions();
 
         if allowed_actions.len() == 0 {
-            self.fully_expanded = true;
-            self.terminal_state = true;
+            self.state = NodeState::LeafNode;
             return None;
         }
 
@@ -122,11 +122,10 @@ impl<A> TreeNode<A> where A: GameAction {
         }
 
         if candidate_actions.len() == 1 {
-            self.fully_expanded = true;
+            self.state = NodeState::FullyExpanded;
         }
 
-        // XXX Select random one XXX
-        //let action = candidate_actions[0].clone();
+        // Select random actions
         let action = *choose_random(&candidate_actions).clone();
 
         self.children.push(TreeNode::new(Some(action)));
@@ -134,49 +133,36 @@ impl<A> TreeNode<A> where A: GameAction {
     }
 
     /// Recursively perform an MCTS iteration.
-    pub fn iteration<G>(&mut self, game: &mut G, c: f32) -> f32
-        where G: Game<A>+Clone {
-
-        if self.terminal_state {
-            let delta = game.reward();
-            self.n += 1.;
-            self.q += delta;
-            return delta;
-        };
-
-        if self.fully_expanded {
-            // Choose child
-            let mut delta;
-            {
+    ///
+    /// XXX Non recursive implementation would probably be faster. XXX
+    pub fn iteration<G: Game<A>>(&mut self, game: &mut G, c: f32) -> f32 {
+        let delta = match self.state {
+            NodeState::LeafNode => {
+                game.reward()
+            },
+            NodeState::FullyExpanded => {
+                // Choose and recurse into child...
                 let child = self.best_child(c).unwrap();
-
-                // Recurse into chosen one...
                 game.make_move(&child.action.unwrap());
-                delta = child.iteration(game, c);
-            }
-
-            // Update my statistics
-            self.n += 1.;
-            self.q += delta;
-            return delta;
-        } else {
-            let mut delta :f32;
-            {
+                child.iteration(game, c)
+            },
+            NodeState::Expandable => {
                 let child = self.expand(game);
                 match child {
-                    Some(child) => {
-                            game.make_move(&child.action.unwrap());
-                            let game = playout(game);
-                            delta = game.reward();
-                            child.n += 1.;
-                            child.q += delta },
-                    None => delta = game.reward()
+                    Some(child) => {           // We expanded our current node...
+                        game.make_move(&child.action.unwrap());
+                        let delta = playout(game).reward();
+                        child.n += 1.;
+                        child.q += delta;
+                        delta
+                    },
+                    None => game.reward()      // Could not expand, current node is a leaf node!
                 }
             }
-            self.n += 1.;
-            self.q += delta;
-            return delta;
         };
+        self.n += 1.;
+        self.q += delta;
+        delta
     }
 }
 
