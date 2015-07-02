@@ -275,9 +275,14 @@ mod tests {
     #[test]
     fn test_merge_vec() {
         let test_cases = vec![
-            (vec![2, 0, 4, 4],    vec![2, 8, 0, 0]),
-            (vec![2, 4, 2, 2],    vec![2, 4, 4, 0]),
-            (vec![2, 2, 2, 0],    vec![4, 2, 0, 0]),
+            (vec![0]            , vec![0]),
+            (vec![2]            , vec![2]),
+            (vec![0, 2]         , vec![2, 0]),
+            (vec![2, 2]         , vec![4, 0]),
+            (vec![2, 8, 2]      , vec![2, 8, 2]),
+            (vec![2, 0, 4, 4]   , vec![2, 8, 0, 0]),
+            (vec![2, 4, 2, 2]   , vec![2, 4, 4, 0]),
+            (vec![2, 2, 2, 0]   , vec![4, 2, 0, 0]),
             (vec![1, 2, 0, 0, 4], vec![1, 2, 4, 0, 0]),
             (vec![1, 2, 2, 0, 4], vec![1, 4, 4, 0, 0]),
             (vec![1, 2, 2, 2, 4], vec![1, 4, 2, 4, 0]),
@@ -286,11 +291,6 @@ mod tests {
 
         /*
         let test_cases = (
-            ((0,), (0,)),
-            ((2,), (2,)),
-            ((0, 2), (2, 0)),
-            ((2, 2), (4, 0)),
-            ((2, 8, 2), (2, 8, 2)),
             ((2, 0, 4, 4), (2, 8, 0, 0)),
             ((2, 4, 2, 2), (2, 4, 4, 0)),
             ((2, 2, 2, 0), (4, 2, 0, 0)),
@@ -354,7 +354,7 @@ mod tests {
     fn random_spawn_until_full(b: &mut Bencher) {
         b.iter(|| {
             let mut game = TwoFortyEight::new();
-            for _ in 0..(WIDTH*HEIGHT/2) {
+            while !game.board_full() {
                 game.random_spawn()
             }
         })
