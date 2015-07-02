@@ -4,11 +4,16 @@ extern crate test;
 use std::fmt;
 use std::f32;
 use std::fmt::Debug;
+use std::hash::Hash;
+use std::collections::HashMap;
 
 use utils::{choose_random};
 
 
 /// A `Game` represets a game state.
+///
+/// It is important that the game behaves fully deterministic,
+/// e.g. it has to produce the same game sequences
 pub trait Game<A: GameAction> : Clone {
 
     /// Return a list with all allowed actions given the current game state.
@@ -19,10 +24,13 @@ pub trait Game<A: GameAction> : Clone {
 
     /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32;
+
+    /// Derterminize the game
+    fn set_rng_seed(&mut self, seed: u32);
 }
 
 /// A `GameAction` represents a move in a game.
-pub trait GameAction: Debug+Clone+Copy+PartialEq {}
+pub trait GameAction: Debug+Clone+Copy+Eq+Hash {}
 
 
 /// Perform a random playout.
@@ -60,7 +68,7 @@ enum NodeState {
 }
 
 #[derive(Debug)]
-struct TreeNode<A: GameAction> {
+pub struct TreeNode<A: GameAction> {
     action: Option<A>,                  // how did we get here
     children: Vec<TreeNode<A>>,         // next steps we investigated
     state: NodeState,                   // is this a leaf node? fully expanded?
@@ -77,6 +85,13 @@ impl<A> TreeNode<A> where A: GameAction {
             state: NodeState::Expandable,
             n: 0., q: 0. }
     }
+
+    /*
+    /// XXX
+    pub fn merge_nodes(nodes: Vec<TreeNode<A>>, depth: usize) -> TreeNode<A> {
+
+    }
+    */
 
     /// Find the best child accoring to UCT1
     pub fn best_child(&mut self, c: f32) -> Option<&mut TreeNode<A>> {
@@ -167,51 +182,14 @@ impl<A> TreeNode<A> where A: GameAction {
 }
 
 
-//////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-pub struct MCTS<G: Game<A>, A: GameAction> {
-    root: TreeNode<A>,
-    game: G
-}
-
-impl <G: Game<A>, A: GameAction> MCTS<G, A> {
-
-    /// Create a new MCTS solver
-    pub fn new(game: &G) -> MCTS<G, A> {
-        let game = game.clone();
-        let root = TreeNode::new(None);
-        MCTS {root: root, game: game}
-    }
-
-    pub fn search(&mut self, game: &G, n_samples: usize, c: f32) -> Vec<A> {
-        let root = &mut self.root;
-
-        // Perform MCTS iterations
-        for _ in 0..n_samples {
-            root.iteration(&mut game.clone(), c);
-        }
-
-        // Find best path
-        let mut best_actions = Vec::new();
-        let mut node = root.best_child(0.);
-        while let Some(child) = node {
-            best_actions.push(child.action.unwrap());
-            node = child.best_child(0.)
-        }
-
-        best_actions
-    }
-}
-
-impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
+impl<A: GameAction> fmt::Display for TreeNode<A> {
 
     /// Output a nicely indented tree
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 
         // Nested definition for recursive formatting
-        fn fmt_subtree<M>(f: &mut fmt::Formatter, node: &TreeNode<M>, indent_level :i32) -> fmt::Result
-            where M: GameAction {
+        fn fmt_subtree<M: GameAction>(f: &mut fmt::Formatter, node: &TreeNode<M>, indent_level :i32) -> fmt::Result {
             for _ in (0..indent_level) {
                 try!(f.write_str("    "));
             }
@@ -225,7 +203,118 @@ impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
             write!(f, "")
         }
 
-        fmt_subtree(f, &self.root, 0)
+        fmt_subtree(f, self, 0)
+    }
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+/// Represents an ensamble of MCTS trees.
+///
+/// For many applications we need to work with ensambles because we use
+/// determinization.
+pub struct MCTS<G: Game<A>, A: GameAction> {
+    roots: Vec<TreeNode<A>>,
+    games: Vec<G>
+}
+
+impl<G: Game<A>, A: GameAction> MCTS<G, A> {
+
+    /// Create a new MCTS solver.
+    pub fn new(game: &G, ensamble_size: usize) -> MCTS<G, A> {
+        let mut roots = Vec::new();
+        let mut games = Vec::new();
+        for i in 0..ensamble_size {
+            let mut game = game.clone();
+            game.set_rng_seed(i as u32);
+            games.push(game);
+            roots.push(TreeNode::new(None));
+        }
+        MCTS {roots: roots, games: games}
+    }
+
+    /// Set a new game state for this solver.
+    pub fn advance_game(&mut self, game: &G) {
+        let ensamble_size = self.games.len();
+
+        let mut roots = Vec::new();
+        let mut games = Vec::new();
+        for i in 0..ensamble_size {
+            let mut game = game.clone();
+            game.set_rng_seed(i as u32);
+            games.push(game);
+            roots.push(TreeNode::new(None));
+        }
+        self.games = games;
+        self.roots = roots;
+    }
+
+    pub fn search(&mut self, n_samples: usize, c: f32) {
+        let ensamble_size = self.games.len();
+
+        // Iterate over ensamble and perform MCTS iterations
+        for e in 0..ensamble_size {
+            let game = &self.games[e];
+            let root = &mut self.roots[e];
+
+            // Perform MCTS iterations
+            for _ in 0..n_samples {
+                let mut this_game = game.clone();
+                root.iteration(&mut this_game, c);
+            }
+        }
+    }
+
+    /// Return the best action found so far by averaging over the ensamble.
+    pub fn best_action(&self) -> Option<A> {
+        let ensamble_size = self.games.len();
+
+        // Merge ensamble results
+        let mut n_values = HashMap::<A, f32>::new();
+        let mut q_values = HashMap::<A, f32>::new();
+
+        for e in 0..ensamble_size {
+            let root = &self.roots[e];
+
+            for child in &root.children {
+                let action = child.action.unwrap();
+
+                let n = n_values.entry(action).or_insert(0.);
+                let q = q_values.entry(action).or_insert(0.);
+
+                *n += child.n;
+                *q += child.q;
+            }
+        }
+
+        // Find best action
+        let mut best_action: Option<A> = None;
+        let mut best_value: f32 = f32::NEG_INFINITY;
+        for (action, n) in &n_values {
+            let q = q_values.get(action).unwrap();
+            let value = q / n;
+            if value > best_value {
+                best_action = Some(*action);
+                best_value = value;
+            }
+        }
+
+        best_action
+    }
+}
+
+
+impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
+
+    /// Output a nicely indented tree
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "Ensable of {} trees:", self.roots.len()));
+        //for root in &self.roots {
+        //    try!(root.fmt(f));
+        //}
+        write!(f, "")
     }
 }
 
@@ -251,30 +340,43 @@ mod tests {
     #[test]
     fn test_expand() {
         let game = MiniGame::new();
-        let mut mcts = MCTS::new(&game);
+        let mut node = TreeNode::new(None);
 
-        mcts.root.expand(&game);
-        mcts.root.expand(&game);
+        node.expand(&game);
+        node.expand(&game);
         {
-            let v = mcts.root.expand(&game).unwrap();
+            let v = node.expand(&game).unwrap();
             v.expand(&game);
         }
 
-        println!("MCTS some expands:\n{}", &mcts);
+        println!("After some expands:\n{}", node);
     }
 
+    /*
     #[test]
     fn test_mcts() {
         let game = MiniGame::new();
-        let mut mcts = MCTS::new(&game);
+        let mut mcts = MCTS::new(&game, 1);
+        //println!("MCTS on new game: {:?}", mcts);
 
-        println!("MCTS on new game: {:?}", mcts);
+
 
         for i in 0..5 {
             mcts.root.iteration(&mut game.clone(), 1.0);
             println!("After {} iteration(s):\n{}", i, mcts);
         }
+    }*/
+
+    #[test]
+    fn test_search() {
+        let game = MiniGame::new();
+        let mut mcts = MCTS::new(&game, 2);
+
+        mcts.search(50, 1.);
+
+        println!("Search result: {:?}", mcts.best_action());
     }
+
 
     #[bench]
     fn bench_playout(b: &mut Bencher) {
@@ -288,21 +390,13 @@ mod tests {
         b.iter(|| expected_reward(&game, 100))
     }
 
-    #[test]
-    fn test_search() {
-        let game = MiniGame::new();
-        let mut mcts = MCTS::new(&game);
-
-        let actions = mcts.search(&game.clone(), 100, 1.);
-        println!("Search result: {:?}", actions);
-    }
 
     #[bench]
-    fn bench_iterations(b: &mut Bencher) {
+    fn bench_search(b: &mut Bencher) {
         let game = MiniGame::new();
-        let mut mcts = MCTS::new(&game);
+        let mut mcts = MCTS::new(&game, 1);
 
-        b.iter(|| mcts.root.iteration(&mut game.clone(), 1.0))
+        b.iter(|| mcts.search(10, 1.0))
     }
 
 }

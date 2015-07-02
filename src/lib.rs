@@ -17,5 +17,3 @@ pub mod twofortyeight;
 // pub mod tictactoe;
 pub mod mcts;
 pub mod utils;
-
-//use mcts::{GameAction, Game, MCTS};

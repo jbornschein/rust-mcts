@@ -2,9 +2,9 @@
 //! Implementation of a simple dummy game.
 //!
 //! The goal of the agent is to advance it's points to exactly 11.
-//! In each turn the agent can choose to add a number between 3 and 5; when 
+//! In each turn the agent can choose to add a number between 3 and 5; when
 //! the sum is below 11 the agent can take another turn; if it is exactly 11
-//! the agent wins and gains a reward of 1; if it is above 11 the agent 
+//! the agent wins and gains a reward of 1; if it is above 11 the agent
 //! looses and gains a final reward of -1.
 //!
 //! Potential, equally good sequences of action which let the agent win are thus
@@ -18,13 +18,13 @@ const WINNING_SUM :u32 = 11;
 const DRAW_MIN :u32 = 3;
 const DRAW_MAX :u32 = 6;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Action {
     add: u32
 }
 impl GameAction for Action {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct MiniGame {
     sum: u32
 }
@@ -42,6 +42,7 @@ impl fmt::Display for MiniGame {
 }
 
 impl Game<Action> for MiniGame {
+    /// Return a list with all allowed actions given the current game state.
     fn allowed_actions(&self) -> Vec<Action> {
         let mut moves = Vec::new();
 
@@ -53,6 +54,7 @@ impl Game<Action> for MiniGame {
         moves
     }
 
+    /// Change the current game state according to the given action.
     fn reward(&self) -> f32 {
              if self.sum <  WINNING_SUM {  0. }
         else if self.sum == WINNING_SUM {  1. }
@@ -60,7 +62,11 @@ impl Game<Action> for MiniGame {
         else { panic!("Huh?") }
     }
 
+    /// Reward for the player when reaching the current game state.
     fn make_move(&mut self, a_move: &Action) {
         self.sum = self.sum + a_move.add;
     }
+
+    /// Derterminize the game
+    fn set_rng_seed(&mut self, _: u32) { }
 }

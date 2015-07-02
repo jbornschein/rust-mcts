@@ -1,23 +1,26 @@
 
 use std::fmt;
 //use std::iter;
-use rand::random;
+use rand::{Rng, XorShiftRng, SeedableRng};
+//use rand::StdRng;
 
 use mcts::{GameAction, Game};
-
 
 pub const WIDTH: usize = 4;
 pub const HEIGHT: usize = 4;
 
-#[derive(Debug, Clone)]
-///  implementation of the 2048 game mechanics.
+#[derive(Clone)]
+/// Implementation of the 2048 game mechanics.
 ///
+/// This game needs a random source to perform moves -- in order to fully derteminize it
+/// we need to store our own random number generator.
 pub struct TwoFortyEight {
+    rng:   XorShiftRng,
     score: f32,
     board: [u16; WIDTH*HEIGHT]
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// Possible moves for the 2048 game.
 ///
 /// One of Up, Down. Left or Right.
@@ -26,13 +29,24 @@ pub enum Action {
 }
 impl GameAction for Action {}
 
+
 impl TwoFortyEight {
     /// Create a new empty game
-    pub fn new() -> TwoFortyEight {
+    pub fn new_empty() -> TwoFortyEight {
+        // XXX What about the seed?
         TwoFortyEight {
+            rng: XorShiftRng::from_seed([1,2,3,4]),
             score: 0.0,
             board: [0; WIDTH*HEIGHT]
         }
+    }
+
+    // Create a new game with two random two's in it.
+    pub fn new() -> TwoFortyEight {
+        let mut game = TwoFortyEight::new_empty();
+        game.random_spawn();
+        game.random_spawn();
+        game
     }
 
     /// Static method
@@ -140,8 +154,8 @@ impl TwoFortyEight {
         assert!(!self.board_full());
 
         loop {
-            let row = random::<usize>() % HEIGHT;
-            let col = random::<usize>() % WIDTH;
+            let row = self.rng.gen::<usize>() % HEIGHT;
+            let col = self.rng.gen::<usize>() % WIDTH;
             if self.get_tile(row, col) == 0 {
                 self.set_tile(row, col, 2);
                 break;
@@ -176,6 +190,11 @@ impl Game<Action> for TwoFortyEight {
     /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32 {
         self.score
+    }
+
+    /// Derterminize the game
+    fn set_rng_seed(&mut self, seed: u32) {
+        self.rng = XorShiftRng::from_seed([seed+0, seed+1, seed+2, seed+3]);
     }
 }
 
@@ -263,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_random_spawn() {
-        let mut game = TwoFortyEight::new();
+        let mut game = TwoFortyEight::new_empty();
 
         for _ in 0..WIDTH*HEIGHT {
             assert!(!game.board_full());
@@ -275,18 +294,24 @@ mod tests {
     #[test]
     fn test_merge_vec() {
         let test_cases = vec![
-            (vec![0]            , vec![0]),
-            (vec![2]            , vec![2]),
-            (vec![0, 2]         , vec![2, 0]),
-            (vec![2, 2]         , vec![4, 0]),
-            (vec![2, 8, 2]      , vec![2, 8, 2]),
-            (vec![2, 0, 4, 4]   , vec![2, 8, 0, 0]),
-            (vec![2, 4, 2, 2]   , vec![2, 4, 4, 0]),
-            (vec![2, 2, 2, 0]   , vec![4, 2, 0, 0]),
-            (vec![1, 2, 0, 0, 4], vec![1, 2, 4, 0, 0]),
-            (vec![1, 2, 2, 0, 4], vec![1, 4, 4, 0, 0]),
-            (vec![1, 2, 2, 2, 4], vec![1, 4, 2, 4, 0]),
-            (vec![0, 2, 0, 2, 0], vec![4, 0, 0, 0, 0])
+            (vec![0]               , vec![0]),
+            (vec![2]               , vec![2]),
+            (vec![0, 2]            , vec![2, 0]),
+            (vec![2, 2]            , vec![4, 0]),
+            (vec![2, 8, 2]         , vec![2, 8, 2]),
+            (vec![2, 0, 4, 4]      , vec![2, 8, 0, 0]),
+            (vec![2, 4, 2, 2]      , vec![2, 4, 4, 0]),
+            (vec![2, 2, 2, 0]      , vec![4, 2, 0, 0]),
+            (vec![1, 2, 0, 0, 4]   , vec![1, 2, 4, 0, 0]),
+            (vec![1, 2, 2, 0, 4]   , vec![1, 4, 4, 0, 0]),
+            (vec![1, 2, 2, 2, 4]   , vec![1, 4, 2, 4, 0]),
+            (vec![0, 2, 0, 2, 0]   , vec![4, 0, 0, 0, 0]),
+            (vec![0, 0, 0, 0, 0]   , vec![0, 0, 0, 0, 0]),
+            (vec![2, 2, 2, 2, 2]   , vec![4, 4, 2, 0, 0]),
+            (vec![2, 0, 2, 0, 4]   , vec![4, 4, 0, 0, 0]),
+            (vec![2, 2, 0, 4, 4]   , vec![4, 8, 0, 0, 0]),
+            (vec![2, 2, 4, 4, 4, 4], vec![4, 8, 8, 0, 0]),
+            (vec![4, 0, 0, 0, 0, 4], vec![8, 0, 0, 0, 0, 0]),
         ];
 
         /*
@@ -303,12 +328,6 @@ mod tests {
             ((4, 0, 0, 4), (8, 0, 0, 0)),
             ((4, 4, 4, 2), (8, 4, 2, 0)),
             ((2, 2, 4, 8), (4, 4, 8, 0)),
-            ((0, 0, 0, 0, 0), (0, 0, 0, 0, 0)),
-            ((2, 2, 2, 2, 2), (4, 4, 2, 0, 0)),
-            ((2, 0, 2, 0, 4), (4, 4, 0, 0, 0)),
-            ((2, 2, 0, 4, 4), (4, 8, 0, 0, 0)),
-            ((2, 2, 4, 4, 4, 4), (4, 8, 8, 0, 0)),
-            ((4, 0, 0, 0, 0, 4), (8, 0, 0, 0, 0, 0))
         );*/
 
         for (input, should) in test_cases {
@@ -319,11 +338,12 @@ mod tests {
 
     #[test]
     fn test_shift_and_merge() {
-        let actions = vec![Action::Down, Action::Right, Action::Up, Action::Left];
 
-        let mut game = TwoFortyEight::new();
+
+        let mut game = TwoFortyEight::new_empty();
         game.set_tile(2, 2, 4);
 
+        let actions = vec![Action::Down, Action::Right, Action::Up, Action::Left];
         for a in &actions {
             let (board, points) = TwoFortyEight::shift_and_merge(game.board, a);
             assert!(points.unwrap() == 0.0);
@@ -335,18 +355,24 @@ mod tests {
 
     #[test]
     fn test_playout() {
-        let mut game = TwoFortyEight::new();
-        game.random_spawn();
-        game.random_spawn();
+        let game = TwoFortyEight::new();
         let final_game = playout(&game);
         println!("{}", final_game);
     }
 
+    #[test]
+    fn test_mcts() {
+        let game = TwoFortyEight::new();
+        let mut mcts = MCTS::new(&game, 5);
+
+        mcts.search(25, 1.);
+        let action = mcts.best_action();
+        action.expect("should give some action");
+    }
+
     #[bench]
     fn bench_playout(b: &mut Bencher) {
-        let mut game = TwoFortyEight::new();
-        game.random_spawn();
-        game.random_spawn();
+        let game = TwoFortyEight::new();
         b.iter(|| playout(&game));
     }
 
