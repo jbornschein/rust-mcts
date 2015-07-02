@@ -5,6 +5,8 @@ use std::fmt;
 use std::f32;
 use std::fmt::Debug;
 
+use rand::{Rng, StdRng, SeedableRng};
+
 use utils::{choose_random};
 
 
@@ -19,6 +21,9 @@ pub trait Game<A: GameAction> : Clone {
 
     /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32;
+
+    /// Derterminize the game
+    fn set_rng(&mut self, seed: usize);
 }
 
 /// A `GameAction` represents a move in a game.
@@ -175,7 +180,7 @@ pub struct MCTS<G: Game<A>, A: GameAction> {
     game: G
 }
 
-impl <G: Game<A>, A: GameAction> MCTS<G, A> {
+impl<G: Game<A>, A: GameAction> MCTS<G, A> {
 
     /// Create a new MCTS solver
     pub fn new(game: &G) -> MCTS<G, A> {
@@ -189,7 +194,9 @@ impl <G: Game<A>, A: GameAction> MCTS<G, A> {
 
         // Perform MCTS iterations
         for _ in 0..n_samples {
-            root.iteration(&mut game.clone(), c);
+            let mut this_game = game.clone();
+            this_game.set_rng(23);
+            root.iteration(&mut this_game, c);
         }
 
         // Find best path

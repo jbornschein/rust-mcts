@@ -2,9 +2,9 @@
 //! Implementation of a simple dummy game.
 //!
 //! The goal of the agent is to advance it's points to exactly 11.
-//! In each turn the agent can choose to add a number between 3 and 5; when 
+//! In each turn the agent can choose to add a number between 3 and 5; when
 //! the sum is below 11 the agent can take another turn; if it is exactly 11
-//! the agent wins and gains a reward of 1; if it is above 11 the agent 
+//! the agent wins and gains a reward of 1; if it is above 11 the agent
 //! looses and gains a final reward of -1.
 //!
 //! Potential, equally good sequences of action which let the agent win are thus
@@ -13,6 +13,8 @@
 
 use std::fmt;
 use mcts::{GameAction, Game};
+
+use rand::Rng;
 
 const WINNING_SUM :u32 = 11;
 const DRAW_MIN :u32 = 3;
@@ -63,4 +65,7 @@ impl Game<Action> for MiniGame {
     fn make_move(&mut self, a_move: &Action) {
         self.sum = self.sum + a_move.add;
     }
+
+    /// Derterminize the game
+    fn set_rng(&mut self, seed: usize) { }
 }

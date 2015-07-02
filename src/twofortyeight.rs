@@ -1,18 +1,19 @@
 
 use std::fmt;
 //use std::iter;
-use rand::random;
+use rand::{Rng, XorShiftRng, SeedableRng};
+//use rand::StdRng;
 
 use mcts::{GameAction, Game};
-
 
 pub const WIDTH: usize = 4;
 pub const HEIGHT: usize = 4;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 ///  implementation of the 2048 game mechanics.
 ///
 pub struct TwoFortyEight {
+    rng:   XorShiftRng,
     score: f32,
     board: [u16; WIDTH*HEIGHT]
 }
@@ -30,6 +31,7 @@ impl TwoFortyEight {
     /// Create a new empty game
     pub fn new() -> TwoFortyEight {
         TwoFortyEight {
+            rng: XorShiftRng::from_seed([1,2,3,4]),
             score: 0.0,
             board: [0; WIDTH*HEIGHT]
         }
@@ -140,8 +142,8 @@ impl TwoFortyEight {
         assert!(!self.board_full());
 
         loop {
-            let row = random::<usize>() % HEIGHT;
-            let col = random::<usize>() % WIDTH;
+            let row = self.rng.gen::<usize>() % HEIGHT;
+            let col = self.rng.gen::<usize>() % WIDTH;
             if self.get_tile(row, col) == 0 {
                 self.set_tile(row, col, 2);
                 break;
@@ -176,6 +178,12 @@ impl Game<Action> for TwoFortyEight {
     /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32 {
         self.score
+    }
+
+    /// Derterminize the game
+    fn set_rng(&mut self, seed: usize) {
+        let seed = seed as u32;
+        self.rng = XorShiftRng::from_seed([seed, seed, seed, seed]);
     }
 }
 
@@ -340,6 +348,23 @@ mod tests {
         game.random_spawn();
         let final_game = playout(&game);
         println!("{}", final_game);
+    }
+
+    #[test]
+    fn test_mcts() {
+        let mut game = TwoFortyEight::new();
+        game.random_spawn();
+        game.random_spawn();
+
+
+        for i in 0..10 {
+            let mut mcts = MCTS::new(&game);
+            let best = mcts.search(&game, 10, 1.);
+            let action = best[0];
+            game.make_move(&action);
+            println!("{:?}\n{}", action, game);
+        }
+        //println!("MCTS on new game: {}", mcts);
     }
 
     #[bench]
