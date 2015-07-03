@@ -1,4 +1,6 @@
 
+[![Build Status](https://travis-ci.org/jbornschein/rust-mcts.svg)](https://travis-ci.org/jbornschein/rust-mcts)
+
 Monte Carlo Tree Search (MCTS) for rust 
 ---------------------------------------
 
