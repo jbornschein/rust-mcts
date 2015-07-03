@@ -49,6 +49,10 @@ fn main() {
             mcts.search(n_samples, 1.);
         };
 
+        if verbose {
+            println!("{:?}", mcts.tree_statistics());
+        }
+
         let action = mcts.best_action();
         match action {
             Some(action) => {
