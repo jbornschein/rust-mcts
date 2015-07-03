@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Jorg Bornschein <jb@capsec.org>"]
 
 [dependencies]
+argparse = "0.2.0"
 rand = "0.3"
 time = "0.1"
