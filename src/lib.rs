@@ -1,4 +1,3 @@
-#![feature(test)]
 
 //! Implementation of the Monte Carlo Tree Search algorithm.
 //!
@@ -9,7 +8,6 @@
 //!
 //! [1] A Survey of Monte Carlo Tree Search Methods
 
-extern crate test;
 extern crate rand;
 
 pub mod minigame;

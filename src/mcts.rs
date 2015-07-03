@@ -1,6 +1,4 @@
 
-extern crate test;
-
 use std::fmt;
 use std::f32;
 use std::fmt::Debug;

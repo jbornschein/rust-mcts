@@ -3,8 +3,6 @@ extern crate argparse;
 extern crate mcts;
 extern crate time;
 
-use std::process::exit;
-
 use argparse::{ArgumentParser, StoreTrue, Store};
 
 
