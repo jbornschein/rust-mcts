@@ -5,3 +5,4 @@ authors = ["Jorg Bornschein <jb@capsec.org>"]
 
 [dependencies]
 rand = "0.3"
+time = "0.1"
