@@ -3,20 +3,19 @@ extern crate argparse;
 extern crate mcts;
 extern crate time;
 
-use argparse::{ArgumentParser, StoreTrue, Store};
-
-
 use time::now;
+use argparse::{ArgumentParser, StoreTrue, Store};
 
 use mcts::mcts::{Game, MCTS};
 use mcts::twofortyeight::TwoFortyEight;
 
+#[cfg_attr(test, allow(dead_code))]
 fn main() {
-    let mut verbose: bool = false;
-    let mut time_per_move: f32 = 1.0;
-    let mut ensemble_size: usize = 10;
+    let mut verbose = false;
+    let mut time_per_move = 1.0;
+    let mut ensemble_size = 10;
 
-    { 
+    {
         let mut ap = ArgumentParser::new();
         ap.set_description("2048 playing.");
         ap.refer(&mut verbose)
