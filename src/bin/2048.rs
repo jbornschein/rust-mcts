@@ -33,12 +33,17 @@ fn main() {
     let n_samples = 10;
     let ms_per_move = (time_per_move * 1000.) as i64;
 
+    println!("Playing 2048\n");
+    println!("Time per move: {} s", time_per_move);
+    println!("Ensemble size: {}", ensemble_size);
+    println!("");
+
     // Create a game and a MCTS solver
     let mut game = TwoFortyEight::new();
     let mut mcts = MCTS::new(&game, ensemble_size);
+    println!("{}", game);
 
     loop {
-
         let t0 = time::now();
         while (time::now()-t0).num_milliseconds() < ms_per_move {
             mcts.search(n_samples, 1.);
@@ -49,7 +54,7 @@ fn main() {
             Some(action) => {
                 game.make_move(&action);
                 mcts.advance_game(&game);
-                println!("{:?}\n{}", action, game);
+                println!("\n... moving {:?}: {}", action, game);
             },
             None => break
         }

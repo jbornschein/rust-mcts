@@ -17,6 +17,7 @@ pub const HEIGHT: usize = 4;
 pub struct TwoFortyEight {
     rng:   XorShiftRng,
     score: f32,
+    moves: usize,
     board: [u16; WIDTH*HEIGHT]
 }
 
@@ -37,6 +38,7 @@ impl TwoFortyEight {
         TwoFortyEight {
             rng: XorShiftRng::from_seed([1,2,3,4]),
             score: 0.0,
+            moves: 0,
             board: [0; WIDTH*HEIGHT]
         }
     }
@@ -183,6 +185,7 @@ impl Game<Action> for TwoFortyEight {
     fn make_move(&mut self, action: &Action) {
         let (new_board, points) = TwoFortyEight::shift_and_merge(self.board, action);
         self.score += points.expect("Illegal move");
+        self.moves += 1;
         self.board = new_board;
         self.random_spawn()
     }
@@ -202,12 +205,13 @@ impl Game<Action> for TwoFortyEight {
 impl fmt::Display for TwoFortyEight {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // XXX could be much nicer XXX
-        try!(writeln!(f, "score={}", self.score));
+        try!(writeln!(f, "Moves={} Score={}:", self.moves, self.score));
         for _ in 0..WIDTH {
             try!(write!(f, "|{: ^5}", "-----"));
         }
-        try!(f.write_str("|\n"));
+        try!(f.write_str("|"));
         for row in 0..HEIGHT {
+            try!(f.write_str("\n"));
             for _ in 0..WIDTH {
                 try!(write!(f, "|{: ^5}", ""));
             }
@@ -228,7 +232,7 @@ impl fmt::Display for TwoFortyEight {
             for _ in 0..WIDTH {
                 try!(write!(f, "|{: ^5}", "-----"));
             }
-            try!(f.write_str("|\n"));
+            try!(f.write_str("|"));
         }
         f.write_str("")
     }
