@@ -1,4 +1,5 @@
-#![feature(test)]
+
+#![feature(test)]     // Does not work with rust 1.0.
 
 //! Implementation of the Monte Carlo Tree Search algorithm.
 //!
@@ -8,7 +9,7 @@
 //! a matching `GameAction` trait that describes possible actions in your `Game`.
 //!
 //! [1] A Survey of Monte Carlo Tree Search Methods
-
+//!
 extern crate test;
 extern crate rand;
 

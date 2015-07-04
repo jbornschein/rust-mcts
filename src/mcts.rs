@@ -1,11 +1,11 @@
 
-extern crate test;
-
 use std::fmt;
+use std::i32;
 use std::f32;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::collections::HashMap;
+use std::cmp::{min, max};
 
 use utils::{choose_random};
 
@@ -78,12 +78,23 @@ pub struct TreeNode<A: GameAction> {
 impl<A> TreeNode<A> where A: GameAction {
 
     /// Create and initialize a new TreeNode
+    ///
+    /// Initialize q and n t to be zero; childeren list to
+    /// be empty and set the node state to Expandable.
     pub fn new(action: Option<A>) -> TreeNode<A> {
         TreeNode::<A> {
             action: action,
             children: Vec::new(),
             state: NodeState::Expandable,
             n: 0., q: 0. }
+    }
+
+    /// Gather some statistics about this subtree
+    pub fn tree_statistics(&self) -> TreeStatistics {
+        let child_stats = self.children.iter()
+                .map(|c| c.tree_statistics())
+                .collect::<Vec<_>>();
+        TreeStatistics::merge(child_stats)
     }
 
     /*
@@ -111,21 +122,19 @@ impl<A> TreeNode<A> where A: GameAction {
     /// Add a child to the current node with an previously unexplored action.
     ///
     /// XXX Use HashSet? Use iterators? XXX
-    pub fn expand<G>(&mut self, game: &G) -> Option<&mut TreeNode<A>>
-        where G: Game<A> {
-        let allowed_actions = game.allowed_actions();
+    pub fn expand<G: Game<A>>(&mut self, game: &G) -> Option<&mut TreeNode<A>> {
 
+        // What are our options given the current game state?
+        let allowed_actions = game.allowed_actions();
         if allowed_actions.len() == 0 {
             self.state = NodeState::LeafNode;
             return None;
         }
 
+        // Get a list with all the actions we tried alreday
         let mut child_actions : Vec<A> = Vec::new();
         for child in &self.children {
-            match child.action {
-                Some(a) => child_actions.push(a),
-                None    => panic!("Child node without action"),
-            }
+                child_actions.push(child.action.expect("Child node without action"));
         }
 
         // Find untried actions
@@ -149,7 +158,9 @@ impl<A> TreeNode<A> where A: GameAction {
 
     /// Recursively perform an MCTS iteration.
     ///
-    /// XXX Non recursive implementation would probably be faster. XXX
+    /// XXX A non-recursive implementation would probably be faster.
+    /// XXX But how to keep &mut pointers to all our parents while
+    /// XXX we fiddle with our leaf node?
     pub fn iteration<G: Game<A>>(&mut self, game: &mut G, c: f32) -> f32 {
         let delta = match self.state {
             NodeState::LeafNode => {
@@ -182,7 +193,6 @@ impl<A> TreeNode<A> where A: GameAction {
 }
 
 
-
 impl<A: GameAction> fmt::Display for TreeNode<A> {
 
     /// Output a nicely indented tree
@@ -207,7 +217,34 @@ impl<A: GameAction> fmt::Display for TreeNode<A> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+/// Store and process some simple statistical information about NodeTrees.
+pub struct TreeStatistics {
+    nodes: i32,
+    min_depth: i32,
+    max_depth: i32,
+}
 
+impl TreeStatistics {
+    fn merge(child_stats: Vec<TreeStatistics>) -> TreeStatistics {
+        if child_stats.len() == 0 {
+            TreeStatistics {
+                nodes: 1,
+                min_depth: 0,
+                max_depth: 0,
+            }
+        } else {
+            TreeStatistics {
+                nodes: child_stats.iter()
+                        .fold(0, |sum, child| sum + child.nodes),
+                min_depth: 1 + child_stats.iter()
+                        .fold(i32::MAX, |depth, child| min(depth, child.min_depth)),
+                max_depth: 1 + child_stats.iter()
+                        .fold(0, |depth, child| max(depth, child.max_depth)),
+            }
+        }
+    }
+}
 //////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
@@ -235,6 +272,17 @@ impl<G: Game<A>, A: GameAction> MCTS<G, A> {
         MCTS {roots: roots, games: games}
     }
 
+    /// Return basic statistical data about the current MCTS tree.
+    ///
+    /// XXX Note: The current implementation considers the ensemble
+    /// to be a tree layer. In other words tree depth and number of
+    /// nodes are all one too large.
+    pub fn tree_statistics(&self) -> TreeStatistics {
+        let child_stats = self.roots.iter()
+                    .map(|c| c.tree_statistics())
+                    .collect::<Vec<_>>();
+        TreeStatistics::merge(child_stats)
+    }
     /// Set a new game state for this solver.
     pub fn advance_game(&mut self, game: &G) {
         let ensamble_size = self.games.len();
@@ -250,6 +298,7 @@ impl<G: Game<A>, A: GameAction> MCTS<G, A> {
         self.games = games;
         self.roots = roots;
     }
+
 
     pub fn search(&mut self, n_samples: usize, c: f32) {
         let ensamble_size = self.games.len();
@@ -350,6 +399,18 @@ mod tests {
         }
 
         println!("After some expands:\n{}", node);
+    }
+
+    #[test]
+    fn test_tree_statistics() {
+        let game = MiniGame::new();
+        let mut mcts = MCTS::new(&game, 2);
+
+        mcts.search(50, 1.);
+
+        let stats = mcts.tree_statistics();
+
+        println!("{:?}", stats);
     }
 
     /*
