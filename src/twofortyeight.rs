@@ -1,8 +1,6 @@
 
 use std::fmt;
-//use std::iter;
 use rand::{Rng, XorShiftRng, SeedableRng};
-//use rand::StdRng;
 
 use mcts::{GameAction, Game};
 
@@ -163,6 +161,17 @@ impl TwoFortyEight {
                 break;
             }
         }
+
+        // This is much slower... even for nearly full borads.
+        // And not correct, because it's not useing self.rng!
+        // let candidates = self.board.iter()
+        //     .enumerate()
+        //     .filter(|&(_, &n)| n == 0)
+        //     .map(|(i, &_)| i)
+        //     .collect::<Vec<_>>();
+        //
+        // let idx = choose_random(&candidates);
+        // self.board[*idx as usize] = 2;
     }
 }
 
