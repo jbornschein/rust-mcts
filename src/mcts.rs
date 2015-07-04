@@ -7,8 +7,9 @@ use std::hash::Hash;
 use std::collections::HashMap;
 use std::cmp::{min, max};
 
-use utils::{choose_random};
+use time;
 
+use utils::{choose_random};
 
 /// A `Game` represets a game state.
 ///
@@ -254,7 +255,8 @@ impl TreeStatistics {
 /// determinization.
 pub struct MCTS<G: Game<A>, A: GameAction> {
     roots: Vec<TreeNode<A>>,
-    games: Vec<G>
+    games: Vec<G>,
+    iterations_per_s: f32,
 }
 
 impl<G: Game<A>, A: GameAction> MCTS<G, A> {
@@ -269,7 +271,11 @@ impl<G: Game<A>, A: GameAction> MCTS<G, A> {
             games.push(game);
             roots.push(TreeNode::new(None));
         }
-        MCTS {roots: roots, games: games}
+        MCTS {
+            roots: roots,
+            games: games,
+            iterations_per_s: 1.
+        }
     }
 
     /// Return basic statistical data about the current MCTS tree.
@@ -299,7 +305,7 @@ impl<G: Game<A>, A: GameAction> MCTS<G, A> {
         self.roots = roots;
     }
 
-
+    /// Perform n_samples MCTS iterations.
     pub fn search(&mut self, n_samples: usize, c: f32) {
         let ensamble_size = self.games.len();
 
@@ -313,6 +319,25 @@ impl<G: Game<A>, A: GameAction> MCTS<G, A> {
                 let mut this_game = game.clone();
                 root.iteration(&mut this_game, c);
             }
+        }
+    }
+
+    /// Perform MCTS iterations for the given time budget (in s).
+    pub fn search_time(&mut self, budget_seconds: f32, c: f32) {
+        let mut samples_total = 0;
+        let t0 = time::now();
+
+        let mut n_samples = (self.iterations_per_s*budget_seconds).max(10.).min(100.) as usize;
+        while n_samples >= 5 {
+            self.search(n_samples, c);
+            samples_total += n_samples;
+
+            let time_spend = (time::now()-t0).num_milliseconds() as f32 / 1000.;
+            self.iterations_per_s = (samples_total as f32) / time_spend;
+
+            let time_left = budget_seconds - time_spend;
+            n_samples = (self.iterations_per_s*time_left).max(0.).min(100.) as usize;
+
         }
     }
 
@@ -373,6 +398,8 @@ impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
 
 #[cfg(test)]
 mod tests {
+    use time;
+    //use std::num::traits::*;
     use test::Bencher;
 
     use mcts::*;
@@ -438,6 +465,25 @@ mod tests {
         println!("Search result: {:?}", mcts.best_action());
     }
 
+    #[test]
+    fn test_search_time() {
+        let game = MiniGame::new();
+        let mut mcts = MCTS::new(&game, 2);
+
+        // Search for ~0.5 seconds
+        let budget_seconds = 0.5;
+
+        let t0 = time::now();
+        mcts.search_time(budget_seconds, 1.);
+
+        let time_spent = (time::now() - t0).num_milliseconds();
+
+        println!("Time spent in search_time: {}", time_spent);
+
+        // Check we really spent ~500 ms searching...
+        assert!(time_spent > 200);
+        assert!(time_spent < 700);
+    }
 
     #[bench]
     fn bench_playout(b: &mut Bencher) {
@@ -450,7 +496,6 @@ mod tests {
         let game = MiniGame::new();
         b.iter(|| expected_reward(&game, 100))
     }
-
 
     #[bench]
     fn bench_search(b: &mut Bencher) {

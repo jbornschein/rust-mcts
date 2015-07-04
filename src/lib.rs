@@ -11,6 +11,7 @@
 //! [1] A Survey of Monte Carlo Tree Search Methods
 //!
 extern crate test;
+extern crate time;
 extern crate rand;
 
 pub mod minigame;

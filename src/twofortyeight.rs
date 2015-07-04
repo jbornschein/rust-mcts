@@ -14,9 +14,9 @@ pub const HEIGHT: usize = 4;
 /// we need to store our own random number generator.
 pub struct TwoFortyEight {
     rng:   XorShiftRng,
-    score: f32,
-    moves: usize,
-    board: [u16; WIDTH*HEIGHT]
+    board: [u16; WIDTH*HEIGHT],
+    pub score: f32,
+    pub moves: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -387,6 +387,12 @@ mod tests {
     fn bench_playout(b: &mut Bencher) {
         let game = TwoFortyEight::new();
         b.iter(|| playout(&game));
+    }
+
+    #[bench]
+    fn bench_allowed_actions(b: &mut Bencher) {
+        let game = TwoFortyEight::new();
+        b.iter(|| game.allowed_actions());
     }
 
     #[bench]
