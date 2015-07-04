@@ -1,5 +1,6 @@
 
 [![Build Status](https://travis-ci.org/jbornschein/rust-mcts.svg)](https://travis-ci.org/jbornschein/rust-mcts)
+[![LGPU V3](https://img.shields.io/github/license/jbornschein/rust-mcts.svg?style=flat)](http://choosealicense.com/licenses/lgpl-3.0/)
 
 Monte Carlo Tree Search (MCTS) for rust 
 ---------------------------------------
