@@ -57,6 +57,7 @@ impl TwoFortyEight {
         let orig_len = vec.len();
         let filtered_vec = vec.iter().map(|t| *t).filter(|&t| t > 0).collect::<Vec<u16>>();
 
+        // Remove duplicates
         let mut merged = Vec::new();
         let mut next = 0;
         for t in filtered_vec {
@@ -74,13 +75,12 @@ impl TwoFortyEight {
         if next != 0 {
             merged.push(next);
         }
+
+        // Make sure we keep the original length and notice any changes
+        let changed = orig_len != merged.len();
         for _ in 0..(orig_len-merged.len()) {
             merged.push(0);
         }
-        let mut changed = false;
-        for i in 0..orig_len {
-            changed |= vec[i] != merged[i];
-        };
         (merged, points, changed)
     }
 
@@ -351,8 +351,6 @@ mod tests {
 
     #[test]
     fn test_shift_and_merge() {
-
-
         let mut game = TwoFortyEight::new_empty();
         game.set_tile(2, 2, 4);
 
