@@ -12,8 +12,14 @@ pub const HEIGHT: usize = 4;
 /// Possible player moves for the 2048 game.
 ///
 /// One of Up, Down. Left or Right.
-pub enum PlayerAction {
+pub enum Direction {
     Up, Down, Left, Right
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// Possible Spawn possible_actions
+pub struct SpawnPosition {
+    idx: usize
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -23,11 +29,11 @@ pub enum PlayerAction {
 /// spawning pseudo move. Tile spawning is modeled as an (adversarial) move
 /// so that we can use straight forward MCTS without any explicit
 /// determinization to get rid of the randomness in the game.
-/// Determinization would require us to use ensambeing to evaluate more than
+/// Determinization would require us to use ensambling to evaluate more than
 /// one possible future.
 pub enum Action {
-    PlayerAction(PlayerAction),
-    SpawnAction(usize),
+    PlayerAction(Direction),
+    SpawnAction(SpawnPosition),
 }
 
 impl GameAction for Action {}
@@ -37,14 +43,13 @@ impl GameAction for Action {}
 /// Implementation of the 2048 game mechanics.
 ///
 /// After initialization the game receives an alternating sequence of
-/// PlayerAction and SparnAction.
+/// PlayerAction and SpawnAction.
 pub struct Adversarial2048 {
     board: [u16; WIDTH*HEIGHT],
     last_action: Option<Action>,
     pub score: f32,
     pub moves: usize,
 }
-
 
 impl Adversarial2048 {
     /// Create a new empty game
@@ -60,29 +65,26 @@ impl Adversarial2048 {
     // Create a new game with two random two's in it.
     pub fn new() -> Adversarial2048 {
         let mut game = Adversarial2048::empty();
-
-        for _ in 0..2 {
-            let possible_actions = game.allowed_spawn_actions();
-            let action = choose_random(&possible_actions);
-
-            game.make_move(action);
-        }
+        game.random_spawn();
+        game.random_spawn();
         game
     }
 
+    #[inline]
     ///
     pub fn get_tile(&self, row: usize, col: usize) -> u16 {
         let idx = row * WIDTH + col;
         self.board[idx]
     }
 
+    #[inline]
     ///
     pub fn set_tile(&mut self, row: usize, col: usize, num: u16) {
         let idx = row * WIDTH + col;
         self.board[idx] = num;
     }
 
-    /// Static method
+    /// Merge a vector according to the 2048 rules to the left.
     fn merge_vec(vec: &Vec<u16>) -> (Vec<u16>, f32, bool) {
         let mut points = 0.0;
 
@@ -120,13 +122,13 @@ impl Adversarial2048 {
     }
 
 
-    /// Shift and merge in the given direction
-    fn shift_and_merge(board: [u16; WIDTH*HEIGHT], action: &PlayerAction) -> ([u16; WIDTH*HEIGHT], Option<f32>) {
-        let (start, ostride, istride) = match *action {
-            PlayerAction::Up    => ( 0,  1,  4),
-            PlayerAction::Down  => (12,  1, -4),
-            PlayerAction::Left  => ( 0,  4,  1),
-            PlayerAction::Right => (15, -4, -1),
+    /// Shift and merge the board in the given direction
+    fn shift_and_merge(board: [u16; WIDTH*HEIGHT], direction: Direction) -> ([u16; WIDTH*HEIGHT], Option<f32>) {
+        let (start, ostride, istride) = match direction {
+            Direction::Up    => ( 0,  1,  4),
+            Direction::Down  => (12,  1, -4),
+            Direction::Left  => ( 0,  4,  1),
+            Direction::Right => (15, -4, -1),
         };
 
         let start = start as isize;
@@ -161,38 +163,7 @@ impl Adversarial2048 {
         }
     }
 
-    /// Place a tile into some random spot.
-    pub fn random_spawn(&mut self) {
-        assert!(!self.board_full());
-
-        let possible_actions = self.allowed_spawn_actions();
-        let action = choose_random(&possible_actions);
-        self.make_move(action);
-    }
-
-    pub fn allowed_player_actions(& self) -> Vec<Action> {
-        let actions = vec![PlayerAction::Up, PlayerAction::Down, PlayerAction::Left, PlayerAction::Right];
-
-        actions.iter().map(|t| *t)
-            .filter(|&a| {
-                let (_, points) = Adversarial2048::shift_and_merge(self.board, &a);
-                match points {
-                    Some(_) => true,
-                    None => false
-                }})
-            .map(|pa| Action::PlayerAction(pa))
-            .collect()
-    }
-
-    pub fn allowed_spawn_actions(& self) -> Vec<Action> {
-        self.board.iter()
-            .enumerate()
-            .filter(|&(_, &a)| a == 0)
-            .map(|(idx, _)| Action::SpawnAction(idx) )
-            .collect()
-    }
-
-    /// Check whether the currend board is full.
+    /// Check whether the board is full.
     pub fn board_full(&self) -> bool {
         for row in 0..HEIGHT {
             for col in 0..WIDTH {
@@ -203,35 +174,75 @@ impl Adversarial2048 {
         }
         true
     }
-}
 
+    /// Place a tile into some random spot.
+    pub fn random_spawn(&mut self) {
+        assert!(!self.board_full());
+
+        let possible_spawns = self.allowed_spawn_actions();
+        let spawn = choose_random(&possible_spawns);
+
+        self.perform_spawn_action(*spawn);
+    }
+
+    #[inline]
+    pub fn allowed_player_actions(&self) -> Vec<Direction> {
+        let directions = vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+
+        directions.iter().map(|t| *t)
+            .filter(|&dir| {
+                let (_, points) = Adversarial2048::shift_and_merge(self.board, dir);
+                match points {
+                    Some(_) => true,
+                    None => false
+                }})
+            .collect()
+    }
+
+    #[inline]
+    pub fn allowed_spawn_actions(& self) -> Vec<SpawnPosition> {
+        self.board.iter()
+            .enumerate()
+            .filter(|&(_, &a)| a == 0)
+            .map(|(idx, _)| SpawnPosition {idx: idx} )
+            .collect()
+    }
+
+    #[inline]
+    pub fn perform_spawn_action(&mut self, position: SpawnPosition) {
+        let idx = position.idx;
+        assert!(self.board[idx] == 0);
+        self.board[idx] = 2;
+    }
+
+    #[inline]
+    pub fn perform_player_action(&mut self, dir: Direction) {
+        let (new_board, points) = Adversarial2048::shift_and_merge(self.board, dir);
+        self.score += points.expect("Illegal move");
+        self.moves += 1;
+        self.board = new_board;
+    }
+
+}
 
 impl Game<Action> for Adversarial2048 {
 
     /// Return a list with all allowed actions given the current game state.
     fn allowed_actions(&self) -> Vec<Action> {
-        if self.moves < 2 {
-            self.allowed_spawn_actions()
-        } else {
-            match self.last_action {
-                None => panic!("Invalid game state"),
-                Some(Action::PlayerAction(_)) => self.allowed_spawn_actions(),
-                Some(Action::SpawnAction(_)) => self.allowed_player_actions(),
-            }
+        match self.last_action {
+            Some(Action::PlayerAction(_)) =>
+                self.allowed_spawn_actions().iter().map(|&dir| Action::SpawnAction(dir)).collect(),
+            None | Some(Action::SpawnAction(_)) =>
+                self.allowed_player_actions().iter().map(|&dir| Action::PlayerAction(dir)).collect(),
         }
     }
 
     /// Change the current game state according to the given action.
     fn make_move(&mut self, action: &Action) {
+        // XXX assert we are performing alternating actions
         match *action {
-            Action::SpawnAction(idx) => {
-                assert!(self.board[idx] == 0);
-                self.board[idx] = 2; }
-            Action::PlayerAction(pa) => {
-                let (new_board, points) = Adversarial2048::shift_and_merge(self.board, &pa);
-                self.score += points.expect("Illegal move");
-                self.moves += 1;
-                self.board = new_board; }
+            Action::PlayerAction(direction) => self.perform_player_action(direction),
+            Action::SpawnAction(spawn) => self.perform_spawn_action(spawn),
         }
         self.last_action = Some(*action);
     }
@@ -244,7 +255,6 @@ impl Game<Action> for Adversarial2048 {
     /// Derterminize the game
     fn set_rng_seed(&mut self, _: u32) { }
 }
-
 
 impl fmt::Display for Adversarial2048 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -365,9 +375,21 @@ mod tests {
     }
 
     #[bench]
-    fn bench_allowed_actions(b: &mut Bencher) {
-        let game = Adversarial2048::new();
-        b.iter(|| game.allowed_actions());
+    fn bench_allowed_spawn_actions(b: &mut Bencher) {
+        let mut game = Adversarial2048::new();
+        for _ in 0..8 {
+            game.random_spawn();
+        }
+        b.iter(|| game.allowed_spawn_actions());
+    }
+
+    #[bench]
+    fn bench_allowed_player_actions(b: &mut Bencher) {
+        let mut game = Adversarial2048::new();
+        for _ in 0..8 {
+            game.random_spawn();
+        }
+        b.iter(|| game.allowed_player_actions());
     }
 
     #[bench]
@@ -390,4 +412,5 @@ mod tests {
 
         b.iter(|| game.board_full())
     }
+
 }
