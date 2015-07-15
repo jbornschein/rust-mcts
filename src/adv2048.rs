@@ -1,52 +1,85 @@
 
 use std::fmt;
-use rand::{Rng, XorShiftRng, SeedableRng};
 
 use mcts::{GameAction, Game};
+use utils::choose_random;
 
 pub const WIDTH: usize = 4;
 pub const HEIGHT: usize = 4;
 
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// Possible player moves for the 2048 game.
+///
+/// One of Up, Down. Left or Right.
+pub enum PlayerAction {
+    Up, Down, Left, Right
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// Game actions for Adversarial2048.
+///
+/// This contains eiher a player move (Up, Down, Left, or Right) or tile
+/// spawning pseudo move. Tile spawning is modeled as an (adversarial) move
+/// so that we can use straight forward MCTS without any explicit
+/// determinization to get rid of the randomness in the game.
+/// Determinization would require us to use ensambeing to evaluate more than
+/// one possible future.
+pub enum Action {
+    PlayerAction(PlayerAction),
+    SpawnAction(usize),
+}
+
+impl GameAction for Action {}
+
+
 #[derive(Clone)]
 /// Implementation of the 2048 game mechanics.
 ///
-/// This game needs a random source to perform moves -- in order to fully derteminize it
-/// we need to store our own random number generator.
-pub struct TwoFortyEight {
-    rng:   XorShiftRng,
+/// After initialization the game receives an alternating sequence of
+/// PlayerAction and SparnAction.
+pub struct Adversarial2048 {
     board: [u16; WIDTH*HEIGHT],
+    last_action: Option<Action>,
     pub score: f32,
     pub moves: usize,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-/// Possible moves for the 2048 game.
-///
-/// One of Up, Down. Left or Right.
-pub enum Action {
-    Up, Down, Left, Right
-}
-impl GameAction for Action {}
 
-
-impl TwoFortyEight {
+impl Adversarial2048 {
     /// Create a new empty game
-    pub fn new_empty() -> TwoFortyEight {
-        // XXX What about the seed?
-        TwoFortyEight {
-            rng: XorShiftRng::from_seed([1,2,3,4]),
+    pub fn empty() -> Adversarial2048 {
+        Adversarial2048 {
             score: 0.0,
             moves: 0,
-            board: [0; WIDTH*HEIGHT]
+            board: [0; WIDTH*HEIGHT],
+            last_action: None,
         }
     }
 
     // Create a new game with two random two's in it.
-    pub fn new() -> TwoFortyEight {
-        let mut game = TwoFortyEight::new_empty();
-        game.random_spawn();
-        game.random_spawn();
+    pub fn new() -> Adversarial2048 {
+        let mut game = Adversarial2048::empty();
+
+        for _ in 0..2 {
+            let possible_actions = game.allowed_spawn_actions();
+            let action = choose_random(&possible_actions);
+
+            game.make_move(action);
+        }
         game
+    }
+
+    ///
+    pub fn get_tile(&self, row: usize, col: usize) -> u16 {
+        let idx = row * WIDTH + col;
+        self.board[idx]
+    }
+
+    ///
+    pub fn set_tile(&mut self, row: usize, col: usize, num: u16) {
+        let idx = row * WIDTH + col;
+        self.board[idx] = num;
     }
 
     /// Static method
@@ -86,13 +119,14 @@ impl TwoFortyEight {
         (merged, points, changed)
     }
 
+
     /// Shift and merge in the given direction
-    fn shift_and_merge(board: [u16; WIDTH*HEIGHT], action: &Action) -> ([u16; WIDTH*HEIGHT], Option<f32>) {
+    fn shift_and_merge(board: [u16; WIDTH*HEIGHT], action: &PlayerAction) -> ([u16; WIDTH*HEIGHT], Option<f32>) {
         let (start, ostride, istride) = match *action {
-            Action::Up    => ( 0,  1,  4),
-            Action::Down  => (12,  1, -4),
-            Action::Left  => ( 0,  4,  1),
-            Action::Right => (15, -4, -1),
+            PlayerAction::Up    => ( 0,  1,  4),
+            PlayerAction::Down  => (12,  1, -4),
+            PlayerAction::Left  => ( 0,  4,  1),
+            PlayerAction::Right => (15, -4, -1),
         };
 
         let start = start as isize;
@@ -111,7 +145,7 @@ impl TwoFortyEight {
                 vec.push(board[idx as usize]);
             }
 
-            let (merged_vec, points, changed) = TwoFortyEight::merge_vec(&vec);
+            let (merged_vec, points, changed) = Adversarial2048::merge_vec(&vec);
             all_points += points;
             any_changed |= changed;
 
@@ -127,16 +161,35 @@ impl TwoFortyEight {
         }
     }
 
-    ///
-    pub fn get_tile(&self, row: usize, col: usize) -> u16 {
-        let idx = row * WIDTH + col;
-        self.board[idx]
+    /// Place a tile into some random spot.
+    pub fn random_spawn(&mut self) {
+        assert!(!self.board_full());
+
+        let possible_actions = self.allowed_spawn_actions();
+        let action = choose_random(&possible_actions);
+        self.make_move(action);
     }
 
-    ///
-    pub fn set_tile(&mut self, row: usize, col: usize, num: u16) {
-        let idx = row * WIDTH + col;
-        self.board[idx] = num;
+    pub fn allowed_player_actions(& self) -> Vec<Action> {
+        let actions = vec![PlayerAction::Up, PlayerAction::Down, PlayerAction::Left, PlayerAction::Right];
+
+        actions.iter().map(|t| *t)
+            .filter(|&a| {
+                let (_, points) = Adversarial2048::shift_and_merge(self.board, &a);
+                match points {
+                    Some(_) => true,
+                    None => false
+                }})
+            .map(|pa| Action::PlayerAction(pa))
+            .collect()
+    }
+
+    pub fn allowed_spawn_actions(& self) -> Vec<Action> {
+        self.board.iter()
+            .enumerate()
+            .filter(|&(_, &a)| a == 0)
+            .map(|(idx, _)| Action::SpawnAction(idx) )
+            .collect()
     }
 
     /// Check whether the currend board is full.
@@ -150,55 +203,37 @@ impl TwoFortyEight {
         }
         true
     }
-
-    /// Place a 2 into some random empty tile
-    pub fn random_spawn(&mut self) {
-        assert!(!self.board_full());
-
-        loop {
-            let row = self.rng.gen::<usize>() % HEIGHT;
-            let col = self.rng.gen::<usize>() % WIDTH;
-            if self.get_tile(row, col) == 0 {
-                self.set_tile(row, col, 2);
-                break;
-            }
-        }
-
-        // This is much slower... even for nearly full borads.
-        // And not correct, because it's not useing self.rng!
-        // let candidates = self.board.iter()
-        //     .enumerate()
-        //     .filter(|&(_, &n)| n == 0)
-        //     .map(|(i, &_)| i)
-        //     .collect::<Vec<_>>();
-        //
-        // let idx = choose_random(&candidates);
-        // self.board[*idx as usize] = 2;
-    }
 }
 
-impl Game<Action> for TwoFortyEight {
+
+impl Game<Action> for Adversarial2048 {
 
     /// Return a list with all allowed actions given the current game state.
     fn allowed_actions(&self) -> Vec<Action> {
-        let actions = vec![Action::Up, Action::Down, Action::Left, Action::Right];
-
-        actions.iter().map(|t| *t).filter(|&a| {
-                let (_, points) = TwoFortyEight::shift_and_merge(self.board, &a);
-                match points {
-                    Some(_) => true,
-                    None => false
-                }
-            }).collect()
+        if self.moves < 2 {
+            self.allowed_spawn_actions()
+        } else {
+            match self.last_action {
+                None => panic!("Invalid game state"),
+                Some(Action::PlayerAction(_)) => self.allowed_spawn_actions(),
+                Some(Action::SpawnAction(_)) => self.allowed_player_actions(),
+            }
+        }
     }
 
     /// Change the current game state according to the given action.
     fn make_move(&mut self, action: &Action) {
-        let (new_board, points) = TwoFortyEight::shift_and_merge(self.board, action);
-        self.score += points.expect("Illegal move");
-        self.moves += 1;
-        self.board = new_board;
-        self.random_spawn()
+        match *action {
+            Action::SpawnAction(idx) => {
+                assert!(self.board[idx] == 0);
+                self.board[idx] = 2; }
+            Action::PlayerAction(pa) => {
+                let (new_board, points) = Adversarial2048::shift_and_merge(self.board, &pa);
+                self.score += points.expect("Illegal move");
+                self.moves += 1;
+                self.board = new_board; }
+        }
+        self.last_action = Some(*action);
     }
 
     /// Reward for the player when reaching the current game state.
@@ -207,13 +242,11 @@ impl Game<Action> for TwoFortyEight {
     }
 
     /// Derterminize the game
-    fn set_rng_seed(&mut self, seed: u32) {
-        self.rng = XorShiftRng::from_seed([seed+0, seed+1, seed+2, seed+3]);
-    }
+    fn set_rng_seed(&mut self, _: u32) { }
 }
 
 
-impl fmt::Display for TwoFortyEight {
+impl fmt::Display for Adversarial2048 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // XXX could be much nicer XXX
         try!(writeln!(f, "Moves={} Score={}:", self.moves, self.score));
@@ -256,11 +289,11 @@ mod tests {
     use test::Bencher;
 
     use mcts::*;
-    use twofortyeight::*;
+    use adv2048::*;
 
     #[test]
     fn test_new() {
-        let game = TwoFortyEight::new();
+        let game = Adversarial2048::new();
 
         assert_eq!(game.reward(), 0.);
     }
@@ -270,7 +303,7 @@ mod tests {
         let coords = vec![(0, 1, 2), (2, 2, 4), (3, 1, 2048)];
 
         // Set given tiles
-        let mut game = TwoFortyEight::new();
+        let mut game = Adversarial2048::new();
         for (row, col, num) in coords.clone() {
             game.set_tile(row, col, num);
         }
@@ -280,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_setget_tile() {
-        let mut game = TwoFortyEight::new();
+        let mut game = Adversarial2048::new();
 
         let coords = vec![(0, 1, 2), (2, 2, 4), (3, 1, 16)];
 
@@ -297,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_random_spawn() {
-        let mut game = TwoFortyEight::new_empty();
+        let mut game = Adversarial2048::empty();
 
         for _ in 0..WIDTH*HEIGHT {
             assert!(!game.board_full());
@@ -306,99 +339,41 @@ mod tests {
         assert!(game.board_full());
     }
 
-    #[test]
-    fn test_merge_vec() {
-        let test_cases = vec![
-            (vec![0]               , vec![0]),
-            (vec![2]               , vec![2]),
-            (vec![0, 2]            , vec![2, 0]),
-            (vec![2, 2]            , vec![4, 0]),
-            (vec![2, 8, 2]         , vec![2, 8, 2]),
-            (vec![2, 0, 4, 4]      , vec![2, 8, 0, 0]),
-            (vec![2, 4, 2, 2]      , vec![2, 4, 4, 0]),
-            (vec![2, 2, 2, 0]      , vec![4, 2, 0, 0]),
-            (vec![1, 2, 0, 0, 4]   , vec![1, 2, 4, 0, 0]),
-            (vec![1, 2, 2, 0, 4]   , vec![1, 4, 4, 0, 0]),
-            (vec![1, 2, 2, 2, 4]   , vec![1, 4, 2, 4, 0]),
-            (vec![0, 2, 0, 2, 0]   , vec![4, 0, 0, 0, 0]),
-            (vec![0, 0, 0, 0, 0]   , vec![0, 0, 0, 0, 0]),
-            (vec![2, 2, 2, 2, 2]   , vec![4, 4, 2, 0, 0]),
-            (vec![2, 0, 2, 0, 4]   , vec![4, 4, 0, 0, 0]),
-            (vec![2, 2, 0, 4, 4]   , vec![4, 8, 0, 0, 0]),
-            (vec![2, 2, 4, 4, 4, 4], vec![4, 8, 8, 0, 0]),
-            (vec![4, 0, 0, 0, 0, 4], vec![8, 0, 0, 0, 0, 0]),
-        ];
-
-        /*
-        let test_cases = (
-            ((2, 0, 4, 4), (2, 8, 0, 0)),
-            ((2, 4, 2, 2), (2, 4, 4, 0)),
-            ((2, 2, 2, 0), (4, 2, 0, 0)),
-            ((0, 2, 2, 2), (4, 2, 0, 0)),
-            ((2, 4, 2, 0), (2, 4, 2, 0)),
-            ((0, 0, 2, 0), (2, 0, 0, 0)),
-            ((0, 0, 0, 2), (2, 0, 0, 0)),
-            ((4, 2, 2, 2), (4, 4, 2, 0)),
-            ((0, 4, 2, 0), (4, 2, 0, 0)),
-            ((4, 0, 0, 4), (8, 0, 0, 0)),
-            ((4, 4, 4, 2), (8, 4, 2, 0)),
-            ((2, 2, 4, 8), (4, 4, 8, 0)),
-        );*/
-
-        for (input, should) in test_cases {
-            let  output = TwoFortyEight::merge_vec(&input);
-            println!("merge_vec({:?}) => {:?}  (should be {:?})", input, output, should);
-        }
-    }
-
-    #[test]
-    fn test_shift_and_merge() {
-        let mut game = TwoFortyEight::new_empty();
-        game.set_tile(2, 2, 4);
-
-        let actions = vec![Action::Down, Action::Right, Action::Up, Action::Left];
-        for a in &actions {
-            let (board, points) = TwoFortyEight::shift_and_merge(game.board, a);
-            assert!(points.unwrap() == 0.0);
-            game.board = board;
-            println!("{}", game);
-        }
-        assert!(game.get_tile(0, 0) == 4);
-    }
 
     #[test]
     fn test_playout() {
-        let game = TwoFortyEight::new();
+        let game = Adversarial2048::new();
         let final_game = playout(&game);
         println!("{}", final_game);
     }
 
+    /*
     #[test]
     fn test_mcts() {
-        let game = TwoFortyEight::new();
+        let game = Adversarial2048::new();
         let mut mcts = MCTS::new(&game, 5);
 
         mcts.search(25, 1.);
         let action = mcts.best_action();
         action.expect("should give some action");
-    }
+    } */
 
     #[bench]
     fn bench_playout(b: &mut Bencher) {
-        let game = TwoFortyEight::new();
+        let game = Adversarial2048::new();
         b.iter(|| playout(&game));
     }
 
     #[bench]
     fn bench_allowed_actions(b: &mut Bencher) {
-        let game = TwoFortyEight::new();
+        let game = Adversarial2048::new();
         b.iter(|| game.allowed_actions());
     }
 
     #[bench]
     fn random_spawn_until_full(b: &mut Bencher) {
         b.iter(|| {
-            let mut game = TwoFortyEight::new();
+            let mut game = Adversarial2048::new();
             while !game.board_full() {
                 game.random_spawn()
             }
@@ -407,7 +382,7 @@ mod tests {
 
     #[bench]
     fn board_full(b: &mut Bencher) {
-        let mut game = TwoFortyEight::new();
+        let mut game = Adversarial2048::new();
 
         for _ in 0..(WIDTH*HEIGHT/2) {
             game.random_spawn()

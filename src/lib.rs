@@ -16,6 +16,7 @@ extern crate rand;
 
 pub mod minigame;
 pub mod twofortyeight;
+pub mod adv2048;
 // pub mod tictactoe;
 pub mod mcts;
 pub mod utils;
