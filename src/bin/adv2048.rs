@@ -13,7 +13,7 @@ fn main() {
     let mut repeats = 1;
     let mut verbose = false;
     let mut time_per_move = 1.0;
-    let mut ensemble_size = 10;
+    let mut ensemble_size = 1;
 
     {
         let mut ap = ArgumentParser::new();
@@ -62,8 +62,9 @@ fn main() {
             match action {
                 Some(action) => {
                     game.make_move(&action);
+                    game.random_spawn();
                     mcts.advance_game(&game);
-                    println!("\n... moving {:?}: {}", action, game);
+                    println!("\n... moved {:?}: {}", action, game);
                 },
                 None => break
             }

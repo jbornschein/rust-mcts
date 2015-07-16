@@ -16,16 +16,14 @@ pub enum Direction {
     Up, Down, Left, Right
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// Possible Spawn possible_actions
-pub struct SpawnPosition {
-    idx: usize
-}
+pub type SpawnPosition = usize;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// Game actions for Adversarial2048.
 ///
-/// This contains eiher a player move (Up, Down, Left, or Right) or tile
+/// This contains eiher a player move (Up, Down, Left, or Right) or a tile
 /// spawning pseudo move. Tile spawning is modeled as an (adversarial) move
 /// so that we can use straight forward MCTS without any explicit
 /// determinization to get rid of the randomness in the game.
@@ -90,12 +88,13 @@ impl Adversarial2048 {
 
         // first, remove zeros
         let orig_len = vec.len();
-        //let filtered_vec = vec.iter().map(|t| *t).filter(|&t| t > 0).collect::<Vec<u16>>();
-        let filtered_vec = vec.iter().map(|&t| t).filter(|&t| t > 0).collect::<Vec<u16>>();
-
+        let filtered_vec = vec.iter()
+                    .filter(|&t| *t > 0)
+                    .map(|&t| t)
+                    .collect::<Vec<u16>>();
 
         // Remove duplicates
-        let mut merged = Vec::new();
+        let mut merged = Vec::with_capacity(HEIGHT);
         let mut next = 0;
         for t in filtered_vec {
             if t == next {
@@ -183,6 +182,7 @@ impl Adversarial2048 {
         let spawn = choose_random(&possible_spawns);
 
         self.perform_spawn_action(*spawn);
+        self.last_action = Some(Action::SpawnAction(*spawn));
     }
 
     #[inline]
@@ -204,13 +204,13 @@ impl Adversarial2048 {
         self.board.iter()
             .enumerate()
             .filter(|&(_, &a)| a == 0)
-            .map(|(idx, _)| SpawnPosition {idx: idx} )
+            .map(|(idx, _)| idx as SpawnPosition)
             .collect()
     }
 
     #[inline]
     pub fn perform_spawn_action(&mut self, position: SpawnPosition) {
-        let idx = position.idx;
+        let idx = position as usize;
         assert!(self.board[idx] == 0);
         self.board[idx] = 2;
     }
@@ -249,7 +249,7 @@ impl Game<Action> for Adversarial2048 {
 
     /// Reward for the player when reaching the current game state.
     fn reward(&self) -> f32 {
-        self.score
+        self.score / 1000.
     }
 
     /// Derterminize the game

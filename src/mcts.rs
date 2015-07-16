@@ -98,13 +98,6 @@ impl<A> TreeNode<A> where A: GameAction {
         TreeStatistics::merge(child_stats)
     }
 
-    /*
-    /// XXX
-    pub fn merge_nodes(nodes: Vec<TreeNode<A>>, depth: usize) -> TreeNode<A> {
-
-    }
-    */
-
     /// Find the best child accoring to UCT1
     pub fn best_child(&mut self, c: f32) -> Option<&mut TreeNode<A>> {
         let mut best_value :f32 = f32::NEG_INFINITY;
@@ -157,6 +150,7 @@ impl<A> TreeNode<A> where A: GameAction {
         self.children.last_mut()
     }
 
+    #[inline]
     /// Recursively perform an MCTS iteration.
     ///
     /// XXX A non-recursive implementation would probably be faster.
