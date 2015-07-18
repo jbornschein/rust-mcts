@@ -404,7 +404,22 @@ mod tests {
 
     use mcts::*;
     use minigame::MiniGame;
-    // use tictactoe::{TicTacToe, Action, Player, GameStatus};
+
+    /*
+    // Are the given
+    fn allmost_equal<T: Float>(a: T, b: T) -> bool {
+        let rtol = 1e-6;
+
+        // Shortcut for inf and neg_inf
+        if (a == b) { return true };
+
+        let a_abs = a.abs();
+        let b_abd = b.abs();
+        let diff = (a-b).abs();
+
+        diff <= tol * a_abs.max(b_abs)
+    }
+    */
 
     #[test]
     fn test_playout() {
