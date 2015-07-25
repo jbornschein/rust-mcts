@@ -296,8 +296,6 @@ impl fmt::Display for Adversarial2048 {
 
 #[cfg(test)]
 mod tests {
-    use test::Bencher;
-
     use mcts::*;
     use adv2048::*;
 
@@ -368,49 +366,6 @@ mod tests {
         action.expect("should give some action");
     } */
 
-    #[bench]
-    fn bench_playout(b: &mut Bencher) {
-        let game = Adversarial2048::new();
-        b.iter(|| playout(&game));
-    }
 
-    #[bench]
-    fn bench_allowed_spawn_actions(b: &mut Bencher) {
-        let mut game = Adversarial2048::new();
-        for _ in 0..8 {
-            game.random_spawn();
-        }
-        b.iter(|| game.allowed_spawn_actions());
-    }
-
-    #[bench]
-    fn bench_allowed_player_actions(b: &mut Bencher) {
-        let mut game = Adversarial2048::new();
-        for _ in 0..8 {
-            game.random_spawn();
-        }
-        b.iter(|| game.allowed_player_actions());
-    }
-
-    #[bench]
-    fn random_spawn_until_full(b: &mut Bencher) {
-        b.iter(|| {
-            let mut game = Adversarial2048::new();
-            while !game.board_full() {
-                game.random_spawn()
-            }
-        })
-    }
-
-    #[bench]
-    fn board_full(b: &mut Bencher) {
-        let mut game = Adversarial2048::new();
-
-        for _ in 0..(WIDTH*HEIGHT/2) {
-            game.random_spawn()
-        }
-
-        b.iter(|| game.board_full())
-    }
 
 }

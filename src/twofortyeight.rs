@@ -1,4 +1,3 @@
-
 use std::fmt;
 use rand::{Rng, XorShiftRng, SeedableRng};
 
@@ -253,8 +252,6 @@ impl fmt::Display for TwoFortyEight {
 
 #[cfg(test)]
 mod tests {
-    use test::Bencher;
-
     use mcts::*;
     use twofortyeight::*;
 
@@ -381,38 +378,5 @@ mod tests {
         mcts.search(25, 1.);
         let action = mcts.best_action();
         action.expect("should give some action");
-    }
-
-    #[bench]
-    fn bench_playout(b: &mut Bencher) {
-        let game = TwoFortyEight::new();
-        b.iter(|| playout(&game));
-    }
-
-    #[bench]
-    fn bench_allowed_actions(b: &mut Bencher) {
-        let game = TwoFortyEight::new();
-        b.iter(|| game.allowed_actions());
-    }
-
-    #[bench]
-    fn random_spawn_until_full(b: &mut Bencher) {
-        b.iter(|| {
-            let mut game = TwoFortyEight::new();
-            while !game.board_full() {
-                game.random_spawn()
-            }
-        })
-    }
-
-    #[bench]
-    fn board_full(b: &mut Bencher) {
-        let mut game = TwoFortyEight::new();
-
-        for _ in 0..(WIDTH*HEIGHT/2) {
-            game.random_spawn()
-        }
-
-        b.iter(|| game.board_full())
     }
 }

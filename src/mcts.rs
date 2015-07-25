@@ -393,8 +393,6 @@ impl<G: Game<A>, A: GameAction> fmt::Display for MCTS<G, A> {
 #[cfg(test)]
 mod tests {
     use time;
-    //use std::num::traits::*;
-    use test::Bencher;
 
     use mcts::*;
     use minigame::MiniGame;
@@ -479,24 +477,6 @@ mod tests {
         assert!(time_spent < 700);
     }
 
-    #[bench]
-    fn bench_playout(b: &mut Bencher) {
-        let game = MiniGame::new();
-        b.iter(|| playout(&game))
-    }
 
-    #[bench]
-    fn bench_expected(b: &mut Bencher) {
-        let game = MiniGame::new();
-        b.iter(|| expected_reward(&game, 100))
-    }
-
-    #[bench]
-    fn bench_search(b: &mut Bencher) {
-        let game = MiniGame::new();
-        let mut mcts = MCTS::new(&game, 1);
-
-        b.iter(|| mcts.search(10, 1.0))
-    }
 
 }
